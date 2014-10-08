@@ -55,6 +55,7 @@
 #include <uORB/topics/offboard_control_setpoint.h>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/vehicle_local_position_setpoint_adjustment.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_vicon_position.h>
@@ -119,6 +120,7 @@ private:
 	void handle_message_quad_swarm_roll_pitch_yaw_thrust(mavlink_message_t *msg);
 	void handle_message_radio_status(mavlink_message_t *msg);
 	void handle_message_manual_control(mavlink_message_t *msg);
+	void handle_message_position_control_setpoint(mavlink_message_t *msg);
 	void handle_message_heartbeat(mavlink_message_t *msg);
 	void handle_message_request_data_stream(mavlink_message_t *msg);
 	void handle_message_hil_sensor(mavlink_message_t *msg);
@@ -154,6 +156,7 @@ private:
 	orb_advert_t _telemetry_status_pub;
 	orb_advert_t _rc_pub;
 	orb_advert_t _manual_pub;
+	orb_advert_t _adjustment_pub;
 	int _control_mode_sub;
 	int _hil_frames;
 	uint64_t _old_timestamp;

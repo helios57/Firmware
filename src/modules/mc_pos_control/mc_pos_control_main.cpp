@@ -67,6 +67,7 @@
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/vehicle_local_position_setpoint_adjustment.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -74,8 +75,7 @@
 #include <lib/geo/geo.h>
 #include <mavlink/mavlink_log.h>
 
-#define TILT_COS_MAX	0.7f
-#define SIGMA			0.000001f
+#include "mc_pos_control_main.hpp"
 
 /**
  * Multicopter position control app start / stop handling function
@@ -84,169 +84,7 @@
  */
 extern "C" __EXPORT int mc_pos_control_main(int argc, char *argv[]);
 
-class MulticopterPositionControl
-{
-public:
-	/**
-	 * Constructor
-	 */
-	MulticopterPositionControl();
-
-	/**
-	 * Destructor, also kills task.
-	 */
-	~MulticopterPositionControl();
-
-	/**
-	 * Start task.
-	 *
-	 * @return		OK on success.
-	 */
-	int		start();
-
-private:
-	const float alt_ctl_dz = 0.2f;
-
-	bool		_task_should_exit;		/**< if true, task should exit */
-	int		_control_task;			/**< task handle for task */
-	int		_mavlink_fd;			/**< mavlink fd */
-
-	int		_att_sub;				/**< vehicle attitude subscription */
-	int		_att_sp_sub;			/**< vehicle attitude setpoint */
-	int		_control_mode_sub;		/**< vehicle control mode subscription */
-	int		_params_sub;			/**< notification of parameter updates */
-	int		_manual_sub;			/**< notification of manual control updates */
-	int		_arming_sub;			/**< arming status of outputs */
-	int		_local_pos_sub;			/**< vehicle local position */
-	int		_pos_sp_triplet_sub;	/**< position setpoint triplet */
-	int		_local_pos_sp_sub;		/**< offboard local position setpoint */
-	int		_global_vel_sp_sub;		/**< offboard global velocity setpoint */
-
-	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
-	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
-	orb_advert_t	_global_vel_sp_pub;		/**< vehicle global velocity setpoint publication */
-
-	struct vehicle_attitude_s			_att;			/**< vehicle attitude */
-	struct vehicle_attitude_setpoint_s		_att_sp;		/**< vehicle attitude setpoint */
-	struct manual_control_setpoint_s		_manual;		/**< r/c channel data */
-	struct vehicle_control_mode_s			_control_mode;	/**< vehicle control mode */
-	struct actuator_armed_s				_arming;		/**< actuator arming status */
-	struct vehicle_local_position_s			_local_pos;		/**< vehicle local position */
-	struct position_setpoint_triplet_s		_pos_sp_triplet;	/**< vehicle global position setpoint triplet */
-	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
-	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
-
-
-	struct {
-		param_t thr_min;
-		param_t thr_max;
-		param_t z_p;
-		param_t z_vel_p;
-		param_t z_vel_i;
-		param_t z_vel_d;
-		param_t z_vel_max;
-		param_t z_ff;
-		param_t xy_p;
-		param_t xy_vel_p;
-		param_t xy_vel_i;
-		param_t xy_vel_d;
-		param_t xy_vel_max;
-		param_t xy_ff;
-		param_t tilt_max_air;
-		param_t land_speed;
-		param_t tilt_max_land;
-	}		_params_handles;		/**< handles for interesting parameters */
-
-	struct {
-		float thr_min;
-		float thr_max;
-		float tilt_max_air;
-		float land_speed;
-		float tilt_max_land;
-
-		math::Vector<3> pos_p;
-		math::Vector<3> vel_p;
-		math::Vector<3> vel_i;
-		math::Vector<3> vel_d;
-		math::Vector<3> vel_ff;
-		math::Vector<3> vel_max;
-		math::Vector<3> sp_offs_max;
-	}		_params;
-
-	struct map_projection_reference_s _ref_pos;
-	float _ref_alt;
-	hrt_abstime _ref_timestamp;
-
-	bool _reset_pos_sp;
-	bool _reset_alt_sp;
-
-	math::Vector<3> _pos;
-	math::Vector<3> _pos_sp;
-	math::Vector<3> _vel;
-	math::Vector<3> _vel_sp;
-	math::Vector<3> _vel_prev;			/**< velocity on previous step */
-	math::Vector<3> _vel_ff;
-	math::Vector<3> _sp_move_rate;
-
-	/**
-	 * Update our local parameter cache.
-	 */
-	int			parameters_update(bool force);
-
-	/**
-	 * Update control outputs
-	 */
-	void		control_update();
-
-	/**
-	 * Check for changes in subscribed topics.
-	 */
-	void		poll_subscriptions();
-
-	static float	scale_control(float ctl, float end, float dz);
-
-	/**
-	 * Update reference for local position projection
-	 */
-	void		update_ref();
-	/**
-	 * Reset position setpoint to current position
-	 */
-	void		reset_pos_sp();
-
-	/**
-	 * Reset altitude setpoint to current altitude
-	 */
-	void		reset_alt_sp();
-
-	/**
-	 * Set position setpoint using manual control
-	 */
-	void		control_manual(float dt);
-
-	/**
-	 * Set position setpoint using offboard control
-	 */
-	void		control_offboard(float dt);
-
-	/**
-	 * Select between barometric and global (AMSL) altitudes
-	 */
-	void		select_alt(bool global);
-
-	/**
-	 * Shim for calling task_main from task_create.
-	 */
-	static void	task_main_trampoline(int argc, char *argv[]);
-
-	/**
-	 * Main sensor collection task.
-	 */
-	void		task_main();
-};
-
-namespace pos_control
-{
+namespace pos_control {
 
 /* oddly, ERROR is not defined for c++ */
 #ifdef ERROR
@@ -254,40 +92,28 @@ namespace pos_control
 #endif
 static const int ERROR = -1;
 
-MulticopterPositionControl	*g_control;
+MulticopterPositionControl *g_control;
 }
 
 MulticopterPositionControl::MulticopterPositionControl() :
 
-	_task_should_exit(false),
-	_control_task(-1),
-	_mavlink_fd(-1),
+		_task_should_exit(false), _control_task(-1), _mavlink_fd(-1),
 
-/* subscriptions */
-	_att_sub(-1),
-	_att_sp_sub(-1),
-	_control_mode_sub(-1),
-	_params_sub(-1),
-	_manual_sub(-1),
-	_arming_sub(-1),
-	_local_pos_sub(-1),
-	_pos_sp_triplet_sub(-1),
-	_global_vel_sp_sub(-1),
+		/* subscriptions */
+		_att_sub(-1), _att_sp_sub(-1), _control_mode_sub(-1), _params_sub(-1), _manual_sub(
+				-1), _manual_adjustment_sub(-1), _arming_sub(-1), _local_pos_sub(
+				-1), _pos_sp_triplet_sub(-1), _global_vel_sp_sub(-1),
 
-/* publications */
-	_att_sp_pub(-1),
-	_local_pos_sp_pub(-1),
-	_global_vel_sp_pub(-1),
+		/* publications */
+		_att_sp_pub(-1), _local_pos_sp_pub(-1), _global_vel_sp_pub(-1),
 
-	_ref_alt(0.0f),
-	_ref_timestamp(0),
+		_ref_alt(0.0f), _ref_timestamp(0),
 
-	_reset_pos_sp(true),
-	_reset_alt_sp(true)
-{
+		_reset_pos_sp(true), _reset_alt_sp(true) {
 	memset(&_att, 0, sizeof(_att));
 	memset(&_att_sp, 0, sizeof(_att_sp));
 	memset(&_manual, 0, sizeof(_manual));
+	memset(&_manual_adjustment, 0, sizeof(_manual_adjustment));
 	memset(&_control_mode, 0, sizeof(_control_mode));
 	memset(&_arming, 0, sizeof(_arming));
 	memset(&_local_pos, 0, sizeof(_local_pos));
@@ -313,30 +139,29 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_vel_ff.zero();
 	_sp_move_rate.zero();
 
-	_params_handles.thr_min		= param_find("MPC_THR_MIN");
-	_params_handles.thr_max		= param_find("MPC_THR_MAX");
-	_params_handles.z_p			= param_find("MPC_Z_P");
-	_params_handles.z_vel_p		= param_find("MPC_Z_VEL_P");
-	_params_handles.z_vel_i		= param_find("MPC_Z_VEL_I");
-	_params_handles.z_vel_d		= param_find("MPC_Z_VEL_D");
-	_params_handles.z_vel_max	= param_find("MPC_Z_VEL_MAX");
-	_params_handles.z_ff		= param_find("MPC_Z_FF");
-	_params_handles.xy_p		= param_find("MPC_XY_P");
-	_params_handles.xy_vel_p	= param_find("MPC_XY_VEL_P");
-	_params_handles.xy_vel_i	= param_find("MPC_XY_VEL_I");
-	_params_handles.xy_vel_d	= param_find("MPC_XY_VEL_D");
-	_params_handles.xy_vel_max	= param_find("MPC_XY_VEL_MAX");
-	_params_handles.xy_ff		= param_find("MPC_XY_FF");
-	_params_handles.tilt_max_air	= param_find("MPC_TILTMAX_AIR");
-	_params_handles.land_speed	= param_find("MPC_LAND_SPEED");
-	_params_handles.tilt_max_land	= param_find("MPC_TILTMAX_LND");
+	_params_handles.thr_min = param_find("MPC_THR_MIN");
+	_params_handles.thr_max = param_find("MPC_THR_MAX");
+	_params_handles.z_p = param_find("MPC_Z_P");
+	_params_handles.z_vel_p = param_find("MPC_Z_VEL_P");
+	_params_handles.z_vel_i = param_find("MPC_Z_VEL_I");
+	_params_handles.z_vel_d = param_find("MPC_Z_VEL_D");
+	_params_handles.z_vel_max = param_find("MPC_Z_VEL_MAX");
+	_params_handles.z_ff = param_find("MPC_Z_FF");
+	_params_handles.xy_p = param_find("MPC_XY_P");
+	_params_handles.xy_vel_p = param_find("MPC_XY_VEL_P");
+	_params_handles.xy_vel_i = param_find("MPC_XY_VEL_I");
+	_params_handles.xy_vel_d = param_find("MPC_XY_VEL_D");
+	_params_handles.xy_vel_max = param_find("MPC_XY_VEL_MAX");
+	_params_handles.xy_ff = param_find("MPC_XY_FF");
+	_params_handles.tilt_max_air = param_find("MPC_TILTMAX_AIR");
+	_params_handles.land_speed = param_find("MPC_LAND_SPEED");
+	_params_handles.tilt_max_land = param_find("MPC_TILTMAX_LND");
 
 	/* fetch initial parameter values */
 	parameters_update(true);
 }
 
-MulticopterPositionControl::~MulticopterPositionControl()
-{
+MulticopterPositionControl::~MulticopterPositionControl() {
 	if (_control_task != -1) {
 		/* task wakes up every 100ms or so at the longest */
 		_task_should_exit = true;
@@ -359,9 +184,7 @@ MulticopterPositionControl::~MulticopterPositionControl()
 	pos_control::g_control = nullptr;
 }
 
-int
-MulticopterPositionControl::parameters_update(bool force)
-{
+int MulticopterPositionControl::parameters_update(bool force) {
 	bool updated;
 	struct parameter_update_s param_upd;
 
@@ -420,9 +243,7 @@ MulticopterPositionControl::parameters_update(bool force)
 	return OK;
 }
 
-void
-MulticopterPositionControl::poll_subscriptions()
-{
+void MulticopterPositionControl::poll_subscriptions() {
 	bool updated;
 
 	orb_check(_att_sub, &updated);
@@ -440,13 +261,21 @@ MulticopterPositionControl::poll_subscriptions()
 	orb_check(_control_mode_sub, &updated);
 
 	if (updated) {
-		orb_copy(ORB_ID(vehicle_control_mode), _control_mode_sub, &_control_mode);
+		orb_copy(ORB_ID(vehicle_control_mode), _control_mode_sub,
+				&_control_mode);
 	}
 
 	orb_check(_manual_sub, &updated);
 
 	if (updated) {
 		orb_copy(ORB_ID(manual_control_setpoint), _manual_sub, &_manual);
+	}
+
+	orb_check(_manual_adjustment_sub, &updated);
+
+	if (updated) {
+		orb_copy(ORB_ID(vehicle_local_position_setpoint_adjustment),
+				_manual_adjustment_sub, &_manual_adjustment);
 	}
 
 	orb_check(_arming_sub, &updated);
@@ -462,9 +291,8 @@ MulticopterPositionControl::poll_subscriptions()
 	}
 }
 
-float
-MulticopterPositionControl::scale_control(float ctl, float end, float dz)
-{
+float MulticopterPositionControl::scale_control(float ctl, float end,
+		float dz) {
 	if (ctl > dz) {
 		return (ctl - dz) / (end - dz);
 
@@ -476,22 +304,19 @@ MulticopterPositionControl::scale_control(float ctl, float end, float dz)
 	}
 }
 
-void
-MulticopterPositionControl::task_main_trampoline(int argc, char *argv[])
-{
+void MulticopterPositionControl::task_main_trampoline(int argc, char *argv[]) {
 	pos_control::g_control->task_main();
 }
 
-void
-MulticopterPositionControl::update_ref()
-{
+void MulticopterPositionControl::update_ref() {
 	if (_local_pos.ref_timestamp != _ref_timestamp) {
 		double lat_sp, lon_sp;
 		float alt_sp = 0.0f;
 
 		if (_ref_timestamp != 0) {
 			/* calculate current position setpoint in global frame */
-			map_projection_reproject(&_ref_pos, _pos_sp(0), _pos_sp(1), &lat_sp, &lon_sp);
+			map_projection_reproject(&_ref_pos, _pos_sp(0), _pos_sp(1), &lat_sp,
+					&lon_sp);
 			alt_sp = _ref_alt - _pos_sp(2);
 		}
 
@@ -501,7 +326,8 @@ MulticopterPositionControl::update_ref()
 
 		if (_ref_timestamp != 0) {
 			/* reproject position setpoint to new reference */
-			map_projection_project(&_ref_pos, lat_sp, lon_sp, &_pos_sp.data[0], &_pos_sp.data[1]);
+			map_projection_project(&_ref_pos, lat_sp, lon_sp, &_pos_sp.data[0],
+					&_pos_sp.data[1]);
 			_pos_sp(2) = -(alt_sp - _ref_alt);
 		}
 
@@ -509,114 +335,139 @@ MulticopterPositionControl::update_ref()
 	}
 }
 
-void
-MulticopterPositionControl::reset_pos_sp()
-{
+void MulticopterPositionControl::reset_pos_sp() {
 	if (_reset_pos_sp) {
 		_reset_pos_sp = false;
 		/* shift position setpoint to make attitude setpoint continuous */
-		_pos_sp(0) = _pos(0) + (_vel(0) - _att_sp.R_body[0][2] * _att_sp.thrust / _params.vel_p(0)
-				- _params.vel_ff(0) * _sp_move_rate(0)) / _params.pos_p(0);
-		_pos_sp(1) = _pos(1) + (_vel(1) - _att_sp.R_body[1][2] * _att_sp.thrust / _params.vel_p(1)
-				- _params.vel_ff(1) * _sp_move_rate(1)) / _params.pos_p(1);
-		mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %.2f, %.2f", (double)_pos_sp(0), (double)_pos_sp(1));
+		_pos_sp(0) = _pos(0)
+				+ (_vel(0)
+						- _att_sp.R_body[0][2] * _att_sp.thrust
+								/ _params.vel_p(0)
+						- _params.vel_ff(0) * _sp_move_rate(0))
+						/ _params.pos_p(0);
+		_pos_sp(1) = _pos(1)
+				+ (_vel(1)
+						- _att_sp.R_body[1][2] * _att_sp.thrust
+								/ _params.vel_p(1)
+						- _params.vel_ff(1) * _sp_move_rate(1))
+						/ _params.pos_p(1);
+		mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %.2f, %.2f",
+				(double )_pos_sp(0), (double )_pos_sp(1));
 	}
 }
 
-void
-MulticopterPositionControl::reset_alt_sp()
-{
+void MulticopterPositionControl::reset_alt_sp() {
 	if (_reset_alt_sp) {
 		_reset_alt_sp = false;
-		_pos_sp(2) = _pos(2) + (_vel(2) - _params.vel_ff(2) * _sp_move_rate(2)) / _params.pos_p(2);
-		mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %.2f", -(double)_pos_sp(2));
+		_pos_sp(2) = _pos(2)
+				+ (_vel(2) - _params.vel_ff(2) * _sp_move_rate(2))
+						/ _params.pos_p(2);
+		mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %.2f",
+				-(double )_pos_sp(2));
 	}
 }
 
-void
-MulticopterPositionControl::control_manual(float dt)
-{
-	_sp_move_rate.zero();
-
+void MulticopterPositionControl::setManualSetpointRate() {
 	if (_control_mode.flag_control_altitude_enabled) {
 		/* move altitude setpoint with throttle stick */
 		_sp_move_rate(2) = -scale_control(_manual.z - 0.5f, 0.5f, alt_ctl_dz);
 	}
-
 	if (_control_mode.flag_control_position_enabled) {
 		/* move position setpoint with roll/pitch stick */
 		_sp_move_rate(0) = _manual.x;
 		_sp_move_rate(1) = _manual.y;
 	}
 
+	//only apply manual_adjustment when no manual inputs from rc
+	if (_sp_move_rate.length() <= 0.01f) {
+		_sp_move_rate(0) = _manual_adjustment.x;
+		_sp_move_rate(1) = _manual_adjustment.y;
+		_sp_move_rate(2) = _manual.z;
+	}
+}
+
+void MulticopterPositionControl::limitSetpointRate() {
 	/* limit setpoint move rate */
 	float sp_move_norm = _sp_move_rate.length();
-
 	if (sp_move_norm > 1.0f) {
 		_sp_move_rate /= sp_move_norm;
 	}
+}
 
-	/* _sp_move_rate scaled to 0..1, scale it to max speed and rotate around yaw */
-	math::Matrix<3, 3> R_yaw_sp;
-	R_yaw_sp.from_euler(0.0f, 0.0f, _att_sp.yaw_body);
-	_sp_move_rate = R_yaw_sp * _sp_move_rate.emult(_params.vel_max);
-
+void MulticopterPositionControl::resetSetpointIfEnabled() {
 	if (_control_mode.flag_control_altitude_enabled) {
 		/* reset alt setpoint to current altitude if needed */
 		reset_alt_sp();
 	}
-
 	if (_control_mode.flag_control_position_enabled) {
 		/* reset position setpoint to current position if needed */
 		reset_pos_sp();
 	}
+}
 
+void MulticopterPositionControl::calculateNewSetpoint(float dt) {
+	/* _sp_move_rate scaled to 0..1, scale it to max speed and rotate around yaw */
+	math::Matrix<3, 3> R_yaw_sp;
+	R_yaw_sp.from_euler(0.0f, 0.0f, _att_sp.yaw_body);
+	_sp_move_rate = R_yaw_sp * _sp_move_rate.emult(_params.vel_max);
 	/* feed forward setpoint move rate with weight vel_ff */
 	_vel_ff = _sp_move_rate.emult(_params.vel_ff);
-
 	/* move position setpoint */
 	_pos_sp += _sp_move_rate * dt;
+}
 
+math::Vector<3> MulticopterPositionControl::getSetpointDistanceFromCurrent() {
 	/* check if position setpoint is too far from actual position */
 	math::Vector<3> pos_sp_offs;
 	pos_sp_offs.zero();
-
 	if (_control_mode.flag_control_position_enabled) {
 		pos_sp_offs(0) = (_pos_sp(0) - _pos(0)) / _params.sp_offs_max(0);
 		pos_sp_offs(1) = (_pos_sp(1) - _pos(1)) / _params.sp_offs_max(1);
 	}
-
 	if (_control_mode.flag_control_altitude_enabled) {
 		pos_sp_offs(2) = (_pos_sp(2) - _pos(2)) / _params.sp_offs_max(2);
 	}
+	return pos_sp_offs;
+}
 
+void MulticopterPositionControl::adjustSetpointWithLimits(
+		math::Vector<3> pos_sp_offs) {
 	float pos_sp_offs_norm = pos_sp_offs.length();
-
 	if (pos_sp_offs_norm > 1.0f) {
 		pos_sp_offs /= pos_sp_offs_norm;
 		_pos_sp = _pos + pos_sp_offs.emult(_params.sp_offs_max);
 	}
 }
 
-void
-MulticopterPositionControl::control_offboard(float dt)
-{
+void MulticopterPositionControl::control_manual(float dt) {
+	_sp_move_rate.zero();
+	setManualSetpointRate();
+	limitSetpointRate();
+	resetSetpointIfEnabled();
+	calculateNewSetpoint(dt);
+	adjustSetpointWithLimits(getSetpointDistanceFromCurrent());
+}
+
+void MulticopterPositionControl::control_offboard(float dt) {
 	bool updated;
 	orb_check(_pos_sp_triplet_sub, &updated);
 
 	if (updated) {
-		orb_copy(ORB_ID(position_setpoint_triplet), _pos_sp_triplet_sub, &_pos_sp_triplet);
+		orb_copy(ORB_ID(position_setpoint_triplet), _pos_sp_triplet_sub,
+				&_pos_sp_triplet);
 	}
 
 	if (_pos_sp_triplet.current.valid) {
-		if (_control_mode.flag_control_position_enabled && _pos_sp_triplet.current.position_valid) {
+		if (_control_mode.flag_control_position_enabled
+				&& _pos_sp_triplet.current.position_valid) {
 			/* control position */
 			_pos_sp(0) = _pos_sp_triplet.current.x;
 			_pos_sp(1) = _pos_sp_triplet.current.y;
 			_pos_sp(2) = _pos_sp_triplet.current.z;
 			_att_sp.yaw_body = _pos_sp_triplet.current.yaw;
 
-		} else if (_control_mode.flag_control_velocity_enabled && _pos_sp_triplet.current.velocity_valid) {
+		} else if (_control_mode.flag_control_velocity_enabled
+				&& _pos_sp_triplet.current.velocity_valid) {
 			/* control velocity */
 			/* reset position setpoint to current position if needed */
 			reset_pos_sp();
@@ -624,7 +475,8 @@ MulticopterPositionControl::control_offboard(float dt)
 			/* set position setpoint move rate */
 			_sp_move_rate(0) = _pos_sp_triplet.current.vx;
 			_sp_move_rate(1) = _pos_sp_triplet.current.vy;
-			_att_sp.yaw_body = _att_sp.yaw_body + _pos_sp_triplet.current.yawspeed * dt;
+			_att_sp.yaw_body = _att_sp.yaw_body
+					+ _pos_sp_triplet.current.yawspeed * dt;
 		}
 
 		if (_control_mode.flag_control_altitude_enabled) {
@@ -647,9 +499,89 @@ MulticopterPositionControl::control_offboard(float dt)
 	}
 }
 
-void
-MulticopterPositionControl::task_main()
-{
+void MulticopterPositionControl::resetPosToLocal() {
+	_pos(0) = _local_pos.x;
+	_pos(1) = _local_pos.y;
+	_pos(2) = _local_pos.z;
+	_vel(0) = _local_pos.vx;
+	_vel(1) = _local_pos.vy;
+	_vel(2) = _local_pos.vz;
+}
+
+bool MulticopterPositionControl::controlAuto() {
+	/* AUTO */
+	bool updated;
+	orb_check(_pos_sp_triplet_sub, &updated);
+	if (updated) {
+		orb_copy(ORB_ID(position_setpoint_triplet), _pos_sp_triplet_sub,
+				&_pos_sp_triplet);
+	}
+	if (_pos_sp_triplet.current.valid) {
+		/* in case of interrupted mission don't go to waypoint but stay at current position */
+		_reset_pos_sp = true;
+		_reset_alt_sp = true;
+
+		/* project setpoint to local frame */
+		map_projection_project(&_ref_pos, _pos_sp_triplet.current.lat,
+				_pos_sp_triplet.current.lon, &_pos_sp.data[0],
+				&_pos_sp.data[1]);
+		_pos_sp(2) = -(_pos_sp_triplet.current.alt - _ref_alt);
+
+		/* update yaw setpoint if needed */
+		if (isfinite(_pos_sp_triplet.current.yaw)) {
+			_att_sp.yaw_body = _pos_sp_triplet.current.yaw;
+		}
+
+	} else {
+		/* no waypoint, loiter, reset position setpoint if needed */
+		reset_pos_sp();
+		reset_alt_sp();
+	}
+	return updated;
+}
+
+void MulticopterPositionControl::fillLocalPositionSetpoint() {
+	/* fill local position setpoint */
+	_local_pos_sp.timestamp = hrt_absolute_time();
+	_local_pos_sp.x = _pos_sp(0);
+	_local_pos_sp.y = _pos_sp(1);
+	_local_pos_sp.z = _pos_sp(2);
+	_local_pos_sp.yaw = _att_sp.yaw_body;
+}
+
+void MulticopterPositionControl::publishLocalPositionSetpoint() {
+	/* publish local position setpoint */
+	if (_local_pos_sp_pub > 0) {
+		orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_pub,
+				&_local_pos_sp);
+
+	} else {
+		_local_pos_sp_pub = orb_advertise(
+				ORB_ID(vehicle_local_position_setpoint), &_local_pos_sp);
+	}
+}
+
+void MulticopterPositionControl::publishIdleAttitude(math::Matrix<3, 3>& R) {
+	/* idle state, don't run controller and set zero thrust */
+	R.identity();
+	memcpy(&_att_sp.R_body[0][0], R.data, sizeof(_att_sp.R_body));
+	_att_sp.R_valid = true;
+	_att_sp.roll_body = 0.0f;
+	_att_sp.pitch_body = 0.0f;
+	_att_sp.yaw_body = _att.yaw;
+	_att_sp.thrust = 0.0f;
+	_att_sp.timestamp = hrt_absolute_time();
+	/* publish attitude setpoint */
+	if (_att_sp_pub > 0) {
+		orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_att_sp);
+
+	} else {
+		_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint),
+				&_att_sp);
+	}
+}
+
+void MulticopterPositionControl::task_main() {
 	warnx("started");
 
 	_mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
@@ -663,12 +595,14 @@ MulticopterPositionControl::task_main()
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_manual_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
+	_manual_adjustment_sub = orb_subscribe(
+			ORB_ID(vehicle_local_position_setpoint_adjustment));
 	_arming_sub = orb_subscribe(ORB_ID(actuator_armed));
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
 	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
-	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
-
+	_global_vel_sp_sub = orb_subscribe(
+			ORB_ID(vehicle_global_velocity_setpoint));
 
 	parameters_update(true);
 
@@ -730,100 +664,32 @@ MulticopterPositionControl::task_main()
 
 		update_ref();
 
-		if (_control_mode.flag_control_altitude_enabled ||
-		    _control_mode.flag_control_position_enabled ||
-		    _control_mode.flag_control_climb_rate_enabled ||
-		    _control_mode.flag_control_velocity_enabled) {
-
-			_pos(0) = _local_pos.x;
-			_pos(1) = _local_pos.y;
-			_pos(2) = _local_pos.z;
-
-			_vel(0) = _local_pos.vx;
-			_vel(1) = _local_pos.vy;
-			_vel(2) = _local_pos.vz;
-
+		if (_control_mode.flag_control_altitude_enabled
+				|| _control_mode.flag_control_position_enabled
+				|| _control_mode.flag_control_climb_rate_enabled
+				|| _control_mode.flag_control_velocity_enabled) {
+			resetPosToLocal();
 			_vel_ff.zero();
 			_sp_move_rate.zero();
 
 			/* select control source */
 			if (_control_mode.flag_control_manual_enabled) {
-				/* manual control */
 				control_manual(dt);
-
 			} else if (_control_mode.flag_control_offboard_enabled) {
-				/* offboard control */
 				control_offboard(dt);
 
 			} else {
-				/* AUTO */
-				bool updated;
-				orb_check(_pos_sp_triplet_sub, &updated);
-
-				if (updated) {
-					orb_copy(ORB_ID(position_setpoint_triplet), _pos_sp_triplet_sub, &_pos_sp_triplet);
-				}
-
-				if (_pos_sp_triplet.current.valid) {
-					/* in case of interrupted mission don't go to waypoint but stay at current position */
-					_reset_pos_sp = true;
-					_reset_alt_sp = true;
-
-					/* project setpoint to local frame */
-					map_projection_project(&_ref_pos,
-							       _pos_sp_triplet.current.lat, _pos_sp_triplet.current.lon,
-							       &_pos_sp.data[0], &_pos_sp.data[1]);
-					_pos_sp(2) = -(_pos_sp_triplet.current.alt - _ref_alt);
-
-					/* update yaw setpoint if needed */
-					if (isfinite(_pos_sp_triplet.current.yaw)) {
-						_att_sp.yaw_body = _pos_sp_triplet.current.yaw;
-					}
-
-				} else {
-					/* no waypoint, loiter, reset position setpoint if needed */
-					reset_pos_sp();
-					reset_alt_sp();
-				}
+				controlAuto();
 			}
 
-			/* fill local position setpoint */
-			_local_pos_sp.timestamp = hrt_absolute_time();
-			_local_pos_sp.x = _pos_sp(0);
-			_local_pos_sp.y = _pos_sp(1);
-			_local_pos_sp.z = _pos_sp(2);
-			_local_pos_sp.yaw = _att_sp.yaw_body;
+			fillLocalPositionSetpoint();
+			publishLocalPositionSetpoint();
 
-			/* publish local position setpoint */
-			if (_local_pos_sp_pub > 0) {
-				orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_pub, &_local_pos_sp);
-
-			} else {
-				_local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_sp);
-			}
-
-
-			if (!_control_mode.flag_control_manual_enabled && _pos_sp_triplet.current.valid && _pos_sp_triplet.current.type == SETPOINT_TYPE_IDLE) {
+			if (!_control_mode.flag_control_manual_enabled
+					&& _pos_sp_triplet.current.valid
+					&& _pos_sp_triplet.current.type == SETPOINT_TYPE_IDLE) {
 				/* idle state, don't run controller and set zero thrust */
-				R.identity();
-				memcpy(&_att_sp.R_body[0][0], R.data, sizeof(_att_sp.R_body));
-				_att_sp.R_valid = true;
-
-				_att_sp.roll_body = 0.0f;
-				_att_sp.pitch_body = 0.0f;
-				_att_sp.yaw_body = _att.yaw;
-				_att_sp.thrust = 0.0f;
-
-				_att_sp.timestamp = hrt_absolute_time();
-
-				/* publish attitude setpoint */
-				if (_att_sp_pub > 0) {
-					orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_att_sp);
-
-				} else {
-					_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_att_sp);
-				}
-
+				publishIdleAttitude(R);
 			} else {
 				/* run position & altitude controllers, calculate velocity setpoint */
 				math::Vector<3> pos_err = _pos_sp - _pos;
@@ -842,14 +708,16 @@ MulticopterPositionControl::task_main()
 				}
 
 				/* use constant descend rate when landing, ignore altitude setpoint */
-				if (!_control_mode.flag_control_manual_enabled && _pos_sp_triplet.current.valid && _pos_sp_triplet.current.type == SETPOINT_TYPE_LAND) {
+				if (!_control_mode.flag_control_manual_enabled
+						&& _pos_sp_triplet.current.valid
+						&& _pos_sp_triplet.current.type == SETPOINT_TYPE_LAND) {
 					_vel_sp(2) = _params.land_speed;
 				}
 
-
 				if (!_control_mode.flag_control_manual_enabled) {
 					/* limit 3D speed only in non-manual modes */
-					float vel_sp_norm = _vel_sp.edivide(_params.vel_max).length();
+					float vel_sp_norm =
+							_vel_sp.edivide(_params.vel_max).length();
 
 					if (vel_sp_norm > 1.0f) {
 						_vel_sp /= vel_sp_norm;
@@ -862,13 +730,17 @@ MulticopterPositionControl::task_main()
 
 				/* publish velocity setpoint */
 				if (_global_vel_sp_pub > 0) {
-					orb_publish(ORB_ID(vehicle_global_velocity_setpoint), _global_vel_sp_pub, &_global_vel_sp);
+					orb_publish(ORB_ID(vehicle_global_velocity_setpoint),
+							_global_vel_sp_pub, &_global_vel_sp);
 
 				} else {
-					_global_vel_sp_pub = orb_advertise(ORB_ID(vehicle_global_velocity_setpoint), &_global_vel_sp);
+					_global_vel_sp_pub = orb_advertise(
+							ORB_ID(vehicle_global_velocity_setpoint),
+							&_global_vel_sp);
 				}
 
-				if (_control_mode.flag_control_climb_rate_enabled || _control_mode.flag_control_velocity_enabled) {
+				if (_control_mode.flag_control_climb_rate_enabled
+						|| _control_mode.flag_control_velocity_enabled) {
 					/* reset integrals if needed */
 					if (_control_mode.flag_control_climb_rate_enabled) {
 						if (reset_int_z) {
@@ -908,11 +780,13 @@ MulticopterPositionControl::task_main()
 					math::Vector<3> vel_err = _vel_sp - _vel;
 
 					/* derivative of velocity error, not includes setpoint acceleration */
-					math::Vector<3> vel_err_d = (_sp_move_rate - _vel).emult(_params.pos_p) - (_vel - _vel_prev) / dt;
+					math::Vector<3> vel_err_d = (_sp_move_rate - _vel).emult(
+							_params.pos_p) - (_vel - _vel_prev) / dt;
 					_vel_prev = _vel;
 
 					/* thrust vector in NED frame */
-					math::Vector<3> thrust_sp = vel_err.emult(_params.vel_p) + vel_err_d.emult(_params.vel_d) + thrust_int;
+					math::Vector<3> thrust_sp = vel_err.emult(_params.vel_p)
+							+ vel_err_d.emult(_params.vel_d) + thrust_int;
 
 					if (!_control_mode.flag_control_velocity_enabled) {
 						thrust_sp(0) = 0.0f;
@@ -930,7 +804,8 @@ MulticopterPositionControl::task_main()
 					/* limit min lift */
 					float thr_min = _params.thr_min;
 
-					if (!_control_mode.flag_control_velocity_enabled && thr_min < 0.0f) {
+					if (!_control_mode.flag_control_velocity_enabled
+							&& thr_min < 0.0f) {
 						/* don't allow downside thrust direction in manual attitude mode */
 						thr_min = 0.0f;
 					}
@@ -938,8 +813,10 @@ MulticopterPositionControl::task_main()
 					float tilt_max = _params.tilt_max_air;
 
 					/* adjust limits for landing mode */
-					if (!_control_mode.flag_control_manual_enabled && _pos_sp_triplet.current.valid &&
-					    _pos_sp_triplet.current.type == SETPOINT_TYPE_LAND) {
+					if (!_control_mode.flag_control_manual_enabled
+							&& _pos_sp_triplet.current.valid
+							&& _pos_sp_triplet.current.type
+									== SETPOINT_TYPE_LAND) {
 						/* limit max tilt and min lift when landing */
 						tilt_max = _params.tilt_max_land;
 
@@ -958,11 +835,13 @@ MulticopterPositionControl::task_main()
 						/* limit max tilt */
 						if (thr_min >= 0.0f && tilt_max < M_PI_F / 2 - 0.05f) {
 							/* absolute horizontal thrust */
-							float thrust_sp_xy_len = math::Vector<2>(thrust_sp(0), thrust_sp(1)).length();
+							float thrust_sp_xy_len = math::Vector<2>(
+									thrust_sp(0), thrust_sp(1)).length();
 
 							if (thrust_sp_xy_len > 0.01f) {
 								/* max horizontal thrust for given vertical thrust*/
-								float thrust_xy_max = -thrust_sp(2) * tanf(tilt_max);
+								float thrust_xy_max = -thrust_sp(2)
+										* tanf(tilt_max);
 
 								if (thrust_sp_xy_len > thrust_xy_max) {
 									float k = thrust_xy_max / thrust_sp_xy_len;
@@ -981,7 +860,8 @@ MulticopterPositionControl::task_main()
 							att_comp = 1.0f / _att.R[2][2];
 
 						} else if (_att.R[2][2] > 0.0f) {
-							att_comp = ((1.0f / TILT_COS_MAX - 1.0f) / TILT_COS_MAX) * _att.R[2][2] + 1.0f;
+							att_comp = ((1.0f / TILT_COS_MAX - 1.0f)
+									/ TILT_COS_MAX) * _att.R[2][2] + 1.0f;
 							saturation_z = true;
 
 						} else {
@@ -1007,8 +887,11 @@ MulticopterPositionControl::task_main()
 
 							} else {
 								/* preserve thrust Z component and lower XY, keeping altitude is more important than position */
-								float thrust_xy_max = sqrtf(_params.thr_max * _params.thr_max - thrust_sp(2) * thrust_sp(2));
-								float thrust_xy_abs = math::Vector<2>(thrust_sp(0), thrust_sp(1)).length();
+								float thrust_xy_max = sqrtf(
+										_params.thr_max * _params.thr_max
+												- thrust_sp(2) * thrust_sp(2));
+								float thrust_xy_abs = math::Vector<2>(
+										thrust_sp(0), thrust_sp(1)).length();
 								float k = thrust_xy_max / thrust_xy_abs;
 								thrust_sp(0) *= k;
 								thrust_sp(1) *= k;
@@ -1027,12 +910,14 @@ MulticopterPositionControl::task_main()
 					}
 
 					/* update integrals */
-					if (_control_mode.flag_control_velocity_enabled && !saturation_xy) {
+					if (_control_mode.flag_control_velocity_enabled
+							&& !saturation_xy) {
 						thrust_int(0) += vel_err(0) * _params.vel_i(0) * dt;
 						thrust_int(1) += vel_err(1) * _params.vel_i(1) * dt;
 					}
 
-					if (_control_mode.flag_control_climb_rate_enabled && !saturation_z) {
+					if (_control_mode.flag_control_climb_rate_enabled
+							&& !saturation_z) {
 						thrust_int(2) += vel_err(2) * _params.vel_i(2) * dt;
 
 						/* protection against flipping on ground when landing */
@@ -1058,7 +943,8 @@ MulticopterPositionControl::task_main()
 						}
 
 						/* vector of desired yaw direction in XY plane, rotated by PI/2 */
-						math::Vector<3> y_C(-sinf(_att_sp.yaw_body), cosf(_att_sp.yaw_body), 0.0f);
+						math::Vector<3> y_C(-sinf(_att_sp.yaw_body),
+								cosf(_att_sp.yaw_body), 0.0f);
 
 						if (fabsf(body_z(2)) > SIGMA) {
 							/* desired body_x axis, orthogonal to body_z */
@@ -1089,7 +975,8 @@ MulticopterPositionControl::task_main()
 						}
 
 						/* copy rotation matrix to attitude setpoint topic */
-						memcpy(&_att_sp.R_body[0][0], R.data, sizeof(_att_sp.R_body));
+						memcpy(&_att_sp.R_body[0][0], R.data,
+								sizeof(_att_sp.R_body));
 						_att_sp.R_valid = true;
 
 						/* calculate euler angles, for logging only, must not be used for control */
@@ -1104,7 +991,8 @@ MulticopterPositionControl::task_main()
 						R.from_euler(0.0f, 0.0f, _att_sp.yaw_body);
 
 						/* copy rotation matrix to attitude setpoint topic */
-						memcpy(&_att_sp.R_body[0][0], R.data, sizeof(_att_sp.R_body));
+						memcpy(&_att_sp.R_body[0][0], R.data,
+								sizeof(_att_sp.R_body));
 						_att_sp.R_valid = true;
 
 						_att_sp.roll_body = 0.0f;
@@ -1117,10 +1005,12 @@ MulticopterPositionControl::task_main()
 
 					/* publish attitude setpoint */
 					if (_att_sp_pub > 0) {
-						orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_att_sp);
+						orb_publish(ORB_ID(vehicle_attitude_setpoint),
+								_att_sp_pub, &_att_sp);
 
 					} else {
-						_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_att_sp);
+						_att_sp_pub = orb_advertise(
+								ORB_ID(vehicle_attitude_setpoint), &_att_sp);
 					}
 
 				} else {
@@ -1138,7 +1028,9 @@ MulticopterPositionControl::task_main()
 		}
 
 		/* reset altitude controller integral (hovering throttle) to manual throttle after manual throttle control */
-		reset_int_z_manual = _control_mode.flag_armed && _control_mode.flag_control_manual_enabled && !_control_mode.flag_control_climb_rate_enabled;
+		reset_int_z_manual = _control_mode.flag_armed
+				&& _control_mode.flag_control_manual_enabled
+				&& !_control_mode.flag_control_climb_rate_enabled;
 	}
 
 	warnx("stopped");
@@ -1148,18 +1040,15 @@ MulticopterPositionControl::task_main()
 	_exit(0);
 }
 
-int
-MulticopterPositionControl::start()
-{
+int MulticopterPositionControl::start() {
 	ASSERT(_control_task == -1);
 
 	/* start the task */
 	_control_task = task_spawn_cmd("mc_pos_control",
-				       SCHED_DEFAULT,
-				       SCHED_PRIORITY_MAX - 5,
-				       2000,
-				       (main_t)&MulticopterPositionControl::task_main_trampoline,
-				       nullptr);
+	SCHED_DEFAULT,
+	SCHED_PRIORITY_MAX - 5, 2000,
+			(main_t) &MulticopterPositionControl::task_main_trampoline,
+			nullptr);
 
 	if (_control_task < 0) {
 		warn("task start failed");
@@ -1169,8 +1058,7 @@ MulticopterPositionControl::start()
 	return OK;
 }
 
-int mc_pos_control_main(int argc, char *argv[])
-{
+int mc_pos_control_main(int argc, char *argv[]) {
 	if (argc < 1) {
 		errx(1, "usage: mc_pos_control {start|stop|status}");
 	}

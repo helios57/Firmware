@@ -178,6 +178,9 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		MavlinkFTP::get_server()->handle_message(_mavlink, msg);
 		break;
 
+	case MAVLINK_MSG_ID_POSITION_CONTROL_SETPOINT:
+		handle_message_position_control_setpoint(msg);
+		break;
 	default:
 		break;
 	}
@@ -566,6 +569,31 @@ MavlinkReceiver::handle_message_manual_control(mavlink_message_t *msg)
 
 	} else {
 		orb_publish(ORB_ID(manual_control_setpoint), _manual_pub, &manual);
+	}
+}
+
+void
+MavlinkReceiver::handle_message_position_control_setpoint(mavlink_message_t *msg)
+{
+	mavlink_position_control_setpoint_t setpoint;
+	mavlink_msg_position_control_setpoint_decode(msg, &setpoint);
+
+	struct vehicle_local_position_setpoint_adjustment_s adjustment;
+	memset(&adjustment, 0, sizeof(adjustment));
+
+	adjustment.timestamp = hrt_absolute_time();
+	adjustment.x = setpoint.x;
+	adjustment.y = setpoint.y;
+	adjustment.z = setpoint.z;
+	adjustment.yaw = setpoint.yaw;
+
+	warnx("adjustment x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", (double)adjustment.x, (double)adjustment.y, (double)adjustment.z, (double)adjustment.yaw);
+
+	if (_manual_pub < 0) {
+		_manual_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint_adjustment), &adjustment);
+
+	} else {
+		orb_publish(ORB_ID(vehicle_local_position_setpoint_adjustment), _adjustment_pub, &adjustment);
 	}
 }
 

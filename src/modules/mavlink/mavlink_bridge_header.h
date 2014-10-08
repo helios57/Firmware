@@ -85,6 +85,7 @@ extern mavlink_status_t *mavlink_get_channel_status(uint8_t chan);
 extern mavlink_message_t *mavlink_get_channel_buffer(uint8_t chan);
 
 #include <v1.0/common/mavlink.h>
+#include <v1.0/pixhawk/mavlink_msg_position_control_setpoint.h>
 
 __END_DECLS
 
