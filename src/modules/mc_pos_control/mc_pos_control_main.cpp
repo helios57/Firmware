@@ -376,13 +376,13 @@ void MulticopterPositionControl::setManualSetpointRate() {
 		/* move position setpoint with roll/pitch stick */
 		_sp_move_rate(0) = _manual.x;
 		_sp_move_rate(1) = _manual.y;
-	}
 
-	//only apply manual_adjustment when no manual inputs from rc
-	if (_sp_move_rate.length() <= 0.01f) {
-		_sp_move_rate(0) = _manual_adjustment.x;
-		_sp_move_rate(1) = _manual_adjustment.y;
-		_sp_move_rate(2) = _manual.z;
+		//only apply manual_adjustment when no manual inputs from rc
+		if (_sp_move_rate.length() <= 0.01f) {
+			_sp_move_rate(0) = _manual_adjustment.x;
+			_sp_move_rate(1) = _manual_adjustment.y;
+			_sp_move_rate(2) = _manual_adjustment.z;
+		}
 	}
 }
 

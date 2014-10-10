@@ -114,6 +114,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_telemetry_status_pub(-1),
 	_rc_pub(-1),
 	_manual_pub(-1),
+	_adjustment_pub(-1),
 	_control_mode_sub(orb_subscribe(ORB_ID(vehicle_control_mode))),
 	_hil_frames(0),
 	_old_timestamp(0),
@@ -589,8 +590,8 @@ MavlinkReceiver::handle_message_position_control_setpoint(mavlink_message_t *msg
 
 	warnx("adjustment x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", (double)adjustment.x, (double)adjustment.y, (double)adjustment.z, (double)adjustment.yaw);
 
-	if (_manual_pub < 0) {
-		_manual_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint_adjustment), &adjustment);
+	if (_adjustment_pub < 0) {
+		_adjustment_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint_adjustment), &adjustment);
 
 	} else {
 		orb_publish(ORB_ID(vehicle_local_position_setpoint_adjustment), _adjustment_pub, &adjustment);
