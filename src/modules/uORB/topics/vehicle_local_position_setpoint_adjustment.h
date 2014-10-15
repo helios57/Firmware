@@ -33,7 +33,7 @@
  ****************************************************************************/
 
 /**
- * @file vehicle_local_position_setpoint.h
+ * @file vehicle_local_position_setpoint_adjustment.h
  * Definition of the local NED position setpoint adjustment uORB topic.
  */
 

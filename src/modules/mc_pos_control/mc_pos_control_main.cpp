@@ -77,6 +77,8 @@
 
 #include "mc_pos_control_main.hpp"
 
+/* Mavlink file descriptors */
+static int mavlink_fd = 0;
 /**
  * Multicopter position control app start / stop handling function
  *
@@ -378,10 +380,13 @@ void MulticopterPositionControl::setManualSetpointRate() {
 		_sp_move_rate(1) = _manual.y;
 
 		//only apply manual_adjustment when no manual inputs from rc
-		if (_sp_move_rate.length() <= 0.01f) {
+		//if (_sp_move_rate.length() <= 0.1f) {
+		if ((_manual.x + _manual.y) < 0.1f) {
 			_sp_move_rate(0) = _manual_adjustment.x;
 			_sp_move_rate(1) = _manual_adjustment.y;
-			_sp_move_rate(2) = _manual_adjustment.z;
+			_manual_adjustment.x = 0;
+			_manual_adjustment.y = 0;
+			//_sp_move_rate(2) = _manual_adjustment.z;
 		}
 	}
 }
@@ -633,6 +638,11 @@ void MulticopterPositionControl::task_main() {
 	while (!_task_should_exit) {
 		/* wait for up to 500ms for data */
 		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);
+
+		if (mavlink_fd <= 0) {
+			/* try to open the mavlink log device every once in a while */
+			mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+		}
 
 		/* timed out - periodic check for _task_should_exit */
 		if (pret == 0) {

@@ -120,7 +120,7 @@ private:
 	void handle_message_quad_swarm_roll_pitch_yaw_thrust(mavlink_message_t *msg);
 	void handle_message_radio_status(mavlink_message_t *msg);
 	void handle_message_manual_control(mavlink_message_t *msg);
-	void handle_message_position_control_setpoint(mavlink_message_t *msg);
+	void handle_message_set_position_target_local_ned(mavlink_message_t *msg);
 	void handle_message_heartbeat(mavlink_message_t *msg);
 	void handle_message_request_data_stream(mavlink_message_t *msg);
 	void handle_message_hil_sensor(mavlink_message_t *msg);

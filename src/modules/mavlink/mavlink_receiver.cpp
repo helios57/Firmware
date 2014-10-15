@@ -134,6 +134,9 @@ MavlinkReceiver::~MavlinkReceiver()
 void
 MavlinkReceiver::handle_message(mavlink_message_t *msg)
 {
+	char buf[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN];
+			sprintf(buf, "recieved mavlink msg with id %u", msg->msgid);
+	_mavlink->send_statustext_info(buf);
 	switch (msg->msgid) {
 	case MAVLINK_MSG_ID_COMMAND_LONG:
 		handle_message_command_long(msg);
@@ -179,8 +182,8 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		MavlinkFTP::get_server()->handle_message(_mavlink, msg);
 		break;
 
-	case MAVLINK_MSG_ID_POSITION_CONTROL_SETPOINT:
-		handle_message_position_control_setpoint(msg);
+	case MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED:
+		handle_message_set_position_target_local_ned(msg);
 		break;
 	default:
 		break;
@@ -574,10 +577,10 @@ MavlinkReceiver::handle_message_manual_control(mavlink_message_t *msg)
 }
 
 void
-MavlinkReceiver::handle_message_position_control_setpoint(mavlink_message_t *msg)
+MavlinkReceiver::handle_message_set_position_target_local_ned(mavlink_message_t *msg)
 {
-	mavlink_position_control_setpoint_t setpoint;
-	mavlink_msg_position_control_setpoint_decode(msg, &setpoint);
+	mavlink_set_position_target_local_ned_t setpoint;
+	mavlink_msg_set_position_target_local_ned_decode(msg, &setpoint);
 
 	struct vehicle_local_position_setpoint_adjustment_s adjustment;
 	memset(&adjustment, 0, sizeof(adjustment));
@@ -589,6 +592,7 @@ MavlinkReceiver::handle_message_position_control_setpoint(mavlink_message_t *msg
 	adjustment.yaw = setpoint.yaw;
 
 	warnx("adjustment x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", (double)adjustment.x, (double)adjustment.y, (double)adjustment.z, (double)adjustment.yaw);
+	_mavlink->send_statustext_info("in handler 1");
 
 	if (_adjustment_pub < 0) {
 		_adjustment_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint_adjustment), &adjustment);
@@ -596,6 +600,7 @@ MavlinkReceiver::handle_message_position_control_setpoint(mavlink_message_t *msg
 	} else {
 		orb_publish(ORB_ID(vehicle_local_position_setpoint_adjustment), _adjustment_pub, &adjustment);
 	}
+	_mavlink->send_statustext_info("in handler 2");
 }
 
 void
