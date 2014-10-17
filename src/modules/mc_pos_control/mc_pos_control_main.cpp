@@ -369,6 +369,19 @@ void MulticopterPositionControl::reset_alt_sp() {
 	}
 }
 
+float sgn(float x) {
+	if (x > 0.0f)
+		return 1.0f;
+	else if (x < 0.0f)
+		return -1.0f;
+	else
+		return 0.0f;
+}
+
+float getNormalized(float f) {
+	return sgn(f) * fminf(fabsf(f), 0.4f);
+}
+
 void MulticopterPositionControl::setManualSetpointRate() {
 	if (_control_mode.flag_control_altitude_enabled) {
 		/* move altitude setpoint with throttle stick */
@@ -380,13 +393,15 @@ void MulticopterPositionControl::setManualSetpointRate() {
 		_sp_move_rate(1) = _manual.y;
 
 		//only apply manual_adjustment when no manual inputs from rc
-		//if (_sp_move_rate.length() <= 0.1f) {
-		if ((_manual.x + _manual.y) < 0.1f) {
-			_sp_move_rate(0) = _manual_adjustment.x;
-			_sp_move_rate(1) = _manual_adjustment.y;
-			_manual_adjustment.x = 0;
-			_manual_adjustment.y = 0;
-			//_sp_move_rate(2) = _manual_adjustment.z;
+		if ((fabsf(_manual.x) + fabsf(_manual.y)) < 0.1f
+				&& (fabsf(_manual_adjustment.x) + fabsf(_manual_adjustment.y)
+						+ fabsf(_manual_adjustment.z)) > 0.1f) {
+			_sp_move_rate(0) = getNormalized(_manual_adjustment.x);
+			_sp_move_rate(1) = getNormalized(_manual_adjustment.y);
+			_sp_move_rate(2) = getNormalized(_manual_adjustment.z);
+			_manual_adjustment.x *= 0.9f;
+			_manual_adjustment.y *= 0.9f;
+			_manual_adjustment.z *= 0.9f;
 		}
 	}
 }

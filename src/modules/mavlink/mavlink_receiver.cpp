@@ -590,17 +590,12 @@ MavlinkReceiver::handle_message_set_position_target_local_ned(mavlink_message_t 
 	adjustment.y = setpoint.y;
 	adjustment.z = setpoint.z;
 	adjustment.yaw = setpoint.yaw;
-
-	warnx("adjustment x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", (double)adjustment.x, (double)adjustment.y, (double)adjustment.z, (double)adjustment.yaw);
-	_mavlink->send_statustext_info("in handler 1");
-
 	if (_adjustment_pub < 0) {
 		_adjustment_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint_adjustment), &adjustment);
 
 	} else {
 		orb_publish(ORB_ID(vehicle_local_position_setpoint_adjustment), _adjustment_pub, &adjustment);
 	}
-	_mavlink->send_statustext_info("in handler 2");
 }
 
 void
