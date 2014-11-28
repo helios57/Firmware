@@ -100,6 +100,7 @@ private:
 
 	bool _reset_pos_sp;
 	bool _reset_alt_sp;
+	bool _mode_auto;
 
 	math::Vector<3> _pos;
 	math::Vector<3> _pos_sp;
@@ -154,6 +155,11 @@ private:
 	 * Select between barometric and global (AMSL) altitudes
 	 */
 	void		select_alt(bool global);
+
+	/**
+	 * Set position setpoint for AUTO
+	 */
+	void		control_auto(float dt);
 
 	/**
 	 * Shim for calling task_main from task_create.
