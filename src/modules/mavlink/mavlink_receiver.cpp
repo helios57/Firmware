@@ -116,6 +116,8 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_telemetry_status_pub(-1),
 	_rc_pub(-1),
 	_manual_pub(-1),
+	_d3_target_pub(-1),
+	_d3_flow_pub(-1),
 	_control_mode_sub(orb_subscribe(ORB_ID(vehicle_control_mode))),
 	_hil_frames(0),
 	_old_timestamp(0),
@@ -174,6 +176,14 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 
 	case MAVLINK_MSG_ID_MANUAL_CONTROL:
 		handle_message_manual_control(msg);
+		break;
+
+	case MAVLINK_MSG_ID_D3_TARGET:
+		handle_message_d3_target(msg);
+		break;
+
+	case MAVLINK_MSG_ID_D3_FLOW:
+		handle_message_d3_flow(msg);
 		break;
 
 	case MAVLINK_MSG_ID_HEARTBEAT:
@@ -868,6 +878,47 @@ MavlinkReceiver::handle_message_manual_control(mavlink_message_t *msg)
 
 	} else {
 		orb_publish(ORB_ID(manual_control_setpoint), _manual_pub, &manual);
+	}
+}
+void
+MavlinkReceiver::handle_message_d3_target(mavlink_message_t *msg)
+{
+	mavlink_d3_target_t t;
+	mavlink_msg_d3_target_decode(msg, &t);
+
+	struct d3_target_s target;
+	memset(&target, 0, sizeof(target));
+
+	target.timestamp = t.timestamp;
+	target.x = t.x;
+	target.y = t.y;
+
+	if (_d3_target_pub < 0) {
+		_d3_target_pub = orb_advertise(ORB_ID(d3_target), &target);
+
+	} else {
+		orb_publish(ORB_ID(d3_target), _d3_target_pub, &target);
+	}
+}
+void
+MavlinkReceiver::handle_message_d3_flow(mavlink_message_t *msg)
+{
+	mavlink_d3_flow_t t;
+	mavlink_msg_d3_flow_decode(msg, &t);
+
+	struct d3_flow_s flow;
+	memset(&flow, 0, sizeof(flow));
+
+	flow.timestamp_from = t.timestamp_from;
+	flow.timestamp_to = t.timestamp_to;
+	flow.x = t.x;
+	flow.y = t.y;
+
+	if (_d3_flow_pub < 0) {
+		_d3_flow_pub = orb_advertise(ORB_ID(d3_flow), &flow);
+
+	} else {
+		orb_publish(ORB_ID(d3_flow), _d3_flow_pub, &flow);
 	}
 }
 

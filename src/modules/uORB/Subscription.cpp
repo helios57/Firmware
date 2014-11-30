@@ -48,6 +48,8 @@
 #include "topics/position_setpoint_triplet.h"
 #include "topics/vehicle_status.h"
 #include "topics/manual_control_setpoint.h"
+#include "topics/d3_target.h"
+#include "topics/d3_flow.h"
 #include "topics/vehicle_local_position_setpoint.h"
 #include "topics/vehicle_local_position.h"
 #include "topics/vehicle_attitude_setpoint.h"

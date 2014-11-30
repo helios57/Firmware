@@ -152,6 +152,12 @@ ORB_DEFINE(vehicle_attitude_setpoint, struct vehicle_attitude_setpoint_s);
 #include "topics/manual_control_setpoint.h"
 ORB_DEFINE(manual_control_setpoint, struct manual_control_setpoint_s);
 
+#include "topics/d3_target.h"
+ORB_DEFINE(d3_target, struct d3_target_s);
+
+#include "topics/d3_flow.h"
+ORB_DEFINE(d3_flow, struct d3_flow_s);
+
 #include "topics/vehicle_control_debug.h"
 ORB_DEFINE(vehicle_control_debug, struct vehicle_control_debug_s);
 
