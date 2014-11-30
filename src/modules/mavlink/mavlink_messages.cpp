@@ -58,6 +58,8 @@
 #include <uORB/topics/vehicle_attitude_setpoint.h>
 #include <uORB/topics/vehicle_rates_setpoint.h>
 #include <uORB/topics/position_setpoint_triplet.h>
+#include <uORB/topics/d3_target.h>
+#include <uORB/topics/d3_flow.h>
 #include <uORB/topics/optical_flow.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/actuator_controls_effective.h>
@@ -1902,6 +1904,173 @@ protected:
 	}
 };
 
+class MavlinkStreamD3Target : public MavlinkStream
+{
+public:
+	const char *get_name() const
+	{
+		return MavlinkStreamD3Target::get_name_static();
+	}
+
+	static const char *get_name_static()
+	{
+		return "D3_TARGET";
+	}
+
+	uint8_t get_id()
+	{
+		return MAVLINK_MSG_ID_D3_TARGET;
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamD3Target(mavlink);
+	}
+
+	unsigned get_size()
+	{
+		return _target_sub->is_published() ? (MAVLINK_MSG_ID_D3_TARGET_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES) : 0;
+	}
+
+private:
+	MavlinkOrbSubscription *_target_sub;
+	uint64_t _target_time;
+
+	/* do not allow top copying this class */
+	MavlinkStreamD3Target(MavlinkStreamD3Target &);
+	MavlinkStreamD3Target& operator = (const MavlinkStreamD3Target &);
+
+protected:
+	explicit MavlinkStreamD3Target(Mavlink *mavlink) : MavlinkStream(mavlink),
+		_target_sub(_mavlink->add_orb_subscription(ORB_ID(d3_target))),
+		_target_time(0)
+	{}
+	void send(const hrt_abstime t)
+	{
+		struct d3_target_s target;
+
+		if (_target_sub->update(&_target_time, &target)) {
+			mavlink_d3_target_t msg;
+			msg.timestamp = target.timestamp;
+			msg.x = target.x;
+			msg.y = target.y;
+			_mavlink->send_message(MAVLINK_MSG_ID_D3_TARGET, &msg);
+		}
+	}
+};
+
+class MavlinkStreamD3Flow : public MavlinkStream
+{
+public:
+	const char *get_name() const
+	{
+		return MavlinkStreamD3Flow::get_name_static();
+	}
+
+	static const char *get_name_static()
+	{
+		return "D3_FLOW";
+	}
+
+	uint8_t get_id()
+	{
+		return MAVLINK_MSG_ID_D3_FLOW;
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamD3Flow(mavlink);
+	}
+
+	unsigned get_size()
+	{
+		return _flow_sub->is_published() ? (MAVLINK_MSG_ID_D3_FLOW_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES) : 0;
+	}
+
+private:
+	MavlinkOrbSubscription *_flow_sub;
+	uint64_t _flow_time;
+
+	/* do not allow top copying this class */
+	MavlinkStreamD3Flow(MavlinkStreamD3Flow &);
+	MavlinkStreamD3Flow& operator = (const MavlinkStreamD3Flow &);
+
+protected:
+	explicit MavlinkStreamD3Flow(Mavlink *mavlink) : MavlinkStream(mavlink),
+		_flow_sub(_mavlink->add_orb_subscription(ORB_ID(d3_flow))),
+		_flow_time(0)
+	{}
+	void send(const hrt_abstime t)
+	{
+		struct d3_flow_s flow;
+
+		if (_flow_sub->update(&_flow_time, &flow)) {
+			mavlink_d3_flow_t msg;
+			msg.timestamp_from = flow.timestamp_from;
+			msg.timestamp_to= flow.timestamp_to;
+			msg.x = flow.x;
+			msg.y = flow.y;
+			_mavlink->send_message(MAVLINK_MSG_ID_D3_FLOW, &msg);
+		}
+	}
+};
+
+class MavlinkStreamD3PitchRoll : public MavlinkStream
+{
+public:
+	const char *get_name() const
+	{
+		return MavlinkStreamD3PitchRoll::get_name_static();
+	}
+
+	static const char *get_name_static()
+	{
+		return "D3_PITCHROLL";
+	}
+
+	uint8_t get_id()
+	{
+		return MAVLINK_MSG_ID_D3_PitchRoll;
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamD3PitchRoll(mavlink);
+	}
+
+	unsigned get_size()
+	{
+		return _pitchRoll_sub->is_published() ? (MAVLINK_MSG_ID_D3_PitchRoll_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES) : 0;
+	}
+
+private:
+	MavlinkOrbSubscription *_pitchRoll_sub;
+	uint64_t _pitchRoll_time;
+
+	/* do not allow top copying this class */
+	MavlinkStreamD3PitchRoll(MavlinkStreamD3PitchRoll &);
+	MavlinkStreamD3PitchRoll& operator = (const MavlinkStreamD3PitchRoll &);
+
+protected:
+	explicit MavlinkStreamD3PitchRoll(Mavlink *mavlink) : MavlinkStream(mavlink),
+		_pitchRoll_sub(_mavlink->add_orb_subscription(ORB_ID(vehicle_attitude))),
+		_pitchRoll_time(0)
+	{}
+
+	void send(const hrt_abstime t)
+	{
+		struct vehicle_attitude_s att;
+
+		if (_pitchRoll_sub->update(&_pitchRoll_time, &att)) {
+			mavlink_d3_pitchroll_t msg;
+			msg.timestamp = att.timestamp;
+			msg.roll= att.roll;
+			msg.pitch = att.pitch;
+			_mavlink->send_message(MAVLINK_MSG_ID_D3_PitchRoll, &msg);
+		}
+	}
+};
+
 class MavlinkStreamAttitudeControls : public MavlinkStream
 {
 public:
@@ -2204,6 +2373,9 @@ StreamListItem *streams_list[] = {
 	new StreamListItem(&MavlinkStreamRCChannelsRaw::new_instance, &MavlinkStreamRCChannelsRaw::get_name_static),
 	new StreamListItem(&MavlinkStreamManualControl::new_instance, &MavlinkStreamManualControl::get_name_static),
 	new StreamListItem(&MavlinkStreamOpticalFlowRad::new_instance, &MavlinkStreamOpticalFlowRad::get_name_static),
+	new StreamListItem(&MavlinkStreamD3Target::new_instance, &MavlinkStreamD3Target::get_name_static),
+	new StreamListItem(&MavlinkStreamD3Flow::new_instance, &MavlinkStreamD3Flow::get_name_static),
+	new StreamListItem(&MavlinkStreamD3PitchRoll::new_instance, &MavlinkStreamD3PitchRoll::get_name_static),
 	new StreamListItem(&MavlinkStreamAttitudeControls::new_instance, &MavlinkStreamAttitudeControls::get_name_static),
 	new StreamListItem(&MavlinkStreamNamedValueFloat::new_instance, &MavlinkStreamNamedValueFloat::get_name_static),
 	new StreamListItem(&MavlinkStreamCameraCapture::new_instance, &MavlinkStreamCameraCapture::get_name_static),
