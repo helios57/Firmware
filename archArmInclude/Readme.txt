@@ -1,0 +1,1 @@
+To help Eclipse to find generated dynamic includes
