@@ -29,7 +29,7 @@ mavlink stream -d /dev/ttyACM0 -s D3_TARGET -r 10
 usleep 100000
 mavlink stream -d /dev/ttyACM0 -s D3_FLOW -r 10
 usleep 100000
-mavlink stream -d /dev/ttyACM0 -s D3_PITCHROLL -r 100
+mavlink stream -d /dev/ttyACM0 -s D3_PITCHROLL -r 20
 usleep 100000
 
 # Exit shell to make it available to MAVLink
