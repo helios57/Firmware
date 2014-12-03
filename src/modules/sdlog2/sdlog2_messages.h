@@ -422,6 +422,12 @@ struct log_ENCD_s {
 	float vel1;
 };
 
+#define LOG_D3_TARGET_MSG 40
+struct log_d3_target_s {
+	uint64_t timestamp;
+	float x;
+	float y;
+};
 
 /********** SYSTEM MESSAGES, ID > 0x80 **********/
 

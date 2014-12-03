@@ -79,6 +79,7 @@
 #include <uORB/topics/vision_position_estimate.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/optical_flow.h>
+#include <uORB/topics/d3_target.h>
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/differential_pressure.h>
 #include <uORB/topics/airspeed.h>
@@ -948,6 +949,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct vehicle_vicon_position_s vicon_pos;
 		struct vision_position_estimate vision_pos;
 		struct optical_flow_s flow;
+		struct d3_target_s d3_target;
 		struct rc_channels_s rc;
 		struct differential_pressure_s diff_pres;
 		struct airspeed_s airspeed;
@@ -987,6 +989,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_AIRS_s log_AIRS;
 			struct log_ARSP_s log_ARSP;
 			struct log_FLOW_s log_FLOW;
+			struct log_d3_target_s log_d3_target;
 			struct log_GPOS_s log_GPOS;
 			struct log_GPSP_s log_GPSP;
 			struct log_ESC_s log_ESC;
@@ -1031,6 +1034,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int vicon_pos_sub;
 		int vision_pos_sub;
 		int flow_sub;
+		int d3_target_sub;
 		int rc_sub;
 		int airspeed_sub;
 		int esc_sub;
@@ -1062,6 +1066,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 	subs.vicon_pos_sub = orb_subscribe(ORB_ID(vehicle_vicon_position));
 	subs.vision_pos_sub = orb_subscribe(ORB_ID(vision_position_estimate));
 	subs.flow_sub = orb_subscribe(ORB_ID(optical_flow));
+	subs.d3_target_sub = orb_subscribe(ORB_ID(d3_target));
 	subs.rc_sub = orb_subscribe(ORB_ID(rc_channels));
 	subs.airspeed_sub = orb_subscribe(ORB_ID(airspeed));
 	subs.esc_sub = orb_subscribe(ORB_ID(esc_status));
@@ -1360,6 +1365,15 @@ int sdlog2_thread_main(int argc, char *argv[])
 				LOGBUFFER_WRITE_AND_COUNT(IMU);
 			}
 
+		}
+
+		/* --- ATTITUDE SETPOINT --- */
+		if (copy_if_updated(ORB_ID(d3_target), subs.d3_target_sub, &buf.d3_target)) {
+			log_msg.msg_type = LOG_D3_TARGET_MSG;
+			log_msg.body.log_d3_target.timestamp = buf.d3_target.timestamp;
+			log_msg.body.log_d3_target.x = buf.d3_target.x;
+			log_msg.body.log_d3_target.y = buf.d3_target.y;
+			LOGBUFFER_WRITE_AND_COUNT(ATSP);
 		}
 
 		/* --- ATTITUDE --- */
