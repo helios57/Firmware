@@ -43,8 +43,8 @@
  * @author Anton Babushkin <anton.babushkin@me.com>
  */
 
-#ifndef MC_POS_CONTROL_D3_H_
-#define MC_POS_CONTROL_D3_H_
+#ifndef MC_POS_CONTROL_D3_MAIN_H_
+#define MC_POS_CONTROL_D3_MAIN_H_
 
 #include <sys/config.h>
 
@@ -54,5 +54,7 @@
  * @ingroup apps
  */
 extern "C" __EXPORT int mc_pos_control_d3_main(int argc, char *argv[]);
+void task_main_trampoline(int argc, char *argv[]);
+int start();
 
 #endif

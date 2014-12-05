@@ -52,27 +52,23 @@
 #include <string.h>
 #include <sys/types.h>
 #include <systemlib/systemlib.h>
+#include <systemlib/err.h>
 #include <sched.h>
 
 using namespace pos_control_d3;
 
-MulticopterPositionControlD3	*g_control;
+MulticopterPositionControlD3 *g_control;
 
-void task_main_trampoline(int argc, char *argv[])
-{
+void task_main_trampoline(int argc, char *argv[]) {
 	g_control->main_loop();
 }
 
-int start()
-{
+int start() {
 	ASSERT(g_control->_control_task == -1);
 	/* start the task */
 	g_control->_control_task = task_spawn_cmd("mc_pos_control",
-				       SCHED_DEFAULT,
-				       SCHED_PRIORITY_MAX - 5,
-				       2000,
-				       (main_t)&task_main_trampoline,
-				       nullptr);
+	SCHED_DEFAULT,
+	SCHED_PRIORITY_MAX - 5, 2000, (main_t) &task_main_trampoline, nullptr);
 	if (g_control->_control_task < 0) {
 		warn("task start failed");
 		return -errno;
@@ -80,8 +76,7 @@ int start()
 	return OK;
 }
 
-int mc_pos_control_d3_main(int argc, char *argv[])
-{
+int mc_pos_control_d3_main(int argc, char *argv[]) {
 	if (argc < 1) {
 		errx(1, "usage: mc_pos_control_d3 {start|stop|status}");
 	}
@@ -111,7 +106,8 @@ int mc_pos_control_d3_main(int argc, char *argv[])
 	if (!strcmp(argv[1], "status")) {
 		if (g_control) {
 			errx(0, "running");
-		} else {
+		}
+		else {
 			errx(1, "not running");
 		}
 	}
