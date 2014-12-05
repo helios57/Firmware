@@ -12,16 +12,22 @@
 #include <drivers/drv_hrt.h>
 #include <math.h>
 #include <systemlib/param/param.h>
+#include <mathlib/mathlib.h>
 #include <poll.h>
 #include <uORB/uORB.h>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/manual_control_setpoint.h>
-#include <uORB/topics/vehicle_attitude_setpoint.h>
-#include <uORB/topics/parameter_update.h>
 #include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/vehicle_attitude_setpoint.h>
 #include <uORB/topics/vehicle_control_mode.h>
+#include <uORB/topics/parameter_update.h>
 #include <uORB/topics/d3_target.h>
+#include <uORB/topics/sensor_combined.h>
+#include <uORB/topics/vehicle_gps_position.h>
+#include <uORB/topics/optical_flow.h>
+
+using namespace math;
 
 namespace pos_control_d3 {
 
@@ -39,7 +45,9 @@ namespace pos_control_d3 {
 			int manual_control_setpoint_subscription;
 			int actuator_armed_subscription;
 			int d3_target_subscription;
-			bool needsUpdate(int attSub);
+			int sensor_combined_subscription;
+			int vehicle_gps_position_subscription;
+			int optical_flow_subscription;bool needsUpdate(int attSub);
 		public:
 			UOrbBridge();
 			~UOrbBridge();
@@ -49,6 +57,9 @@ namespace pos_control_d3 {
 			struct vehicle_control_mode_s vehicle_control_mode;
 			struct actuator_armed_s actuator_armed; /**< actuator arming status */
 			struct d3_target_s d3_target;
+			struct sensor_combined_s sensor_combined;
+			struct vehicle_gps_position_s vehicle_gps_position;
+			struct optical_flow_s optical_flow;
 			void update();/** updates all subsctions*/
 			void publish();/** publishes all outgoin messages*/
 			int getVehicleAttitudeSubscription();
@@ -61,6 +72,15 @@ namespace pos_control_d3 {
 					hrt_abstime lastTimestamp; //
 					bool armed; //
 					bool manualXYinput;
+					Matrix<3, 3> R;
+					float rollSetpoint;
+					float pitchSetpoint;
+					float yawSetpoint;
+					float thrustSetpoint;
+					float manualX;
+					float manualY;
+					float manualZ;
+					float manualR;
 			} state;
 			int _control_task; /**< task handle for task */
 			bool _task_should_exit; /**< if true, task should exit */
@@ -72,6 +92,9 @@ namespace pos_control_d3 {
 			UOrbBridge *uorb;
 			void initialize(); //
 			void doLoop();
+			void publishAttitudeSetpoint();
+			void resetSetpointsOnArming();bool checkEnablement();
+			void applyRCInputIfAvailable(float dt);
 	};
 } /* namespace pos_control_d3 */
 

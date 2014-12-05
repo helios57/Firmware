@@ -30,12 +30,18 @@ UOrbBridge::UOrbBridge() :
 	manual_control_setpoint_subscription = orb_subscribe(ORB_ID(manual_control_setpoint));
 	actuator_armed_subscription = orb_subscribe(ORB_ID(actuator_armed));
 	d3_target_subscription = orb_subscribe(ORB_ID(d3_target));
+	sensor_combined_subscription = orb_subscribe(ORB_ID(sensor_combined));
+	vehicle_gps_position_subscription = orb_subscribe(ORB_ID(vehicle_gps_position));
+	optical_flow_subscription = orb_subscribe(ORB_ID(optical_flow));
 	memset(&vehicle_attitude, 0, sizeof(vehicle_attitude));
 	memset(&vehicle_attitude_setpoint, 0, sizeof(vehicle_attitude_setpoint));
 	memset(&vehicle_control_mode, 0, sizeof(vehicle_control_mode));
 	memset(&manual_control_setpoint, 0, sizeof(manual_control_setpoint));
 	memset(&actuator_armed, 0, sizeof(actuator_armed));
 	memset(&d3_target, 0, sizeof(d3_target));
+	memset(&sensor_combined, 0, sizeof(sensor_combined));
+	memset(&vehicle_gps_position, 0, sizeof(vehicle_gps_position));
+	memset(&optical_flow, 0, sizeof(optical_flow));
 }
 
 UOrbBridge::~UOrbBridge() {
@@ -44,6 +50,10 @@ UOrbBridge::~UOrbBridge() {
 	orb_unsubscribe(vehicle_control_mode_subscription);
 	orb_unsubscribe(manual_control_setpoint_subscription);
 	orb_unsubscribe(actuator_armed_subscription);
+	orb_unsubscribe(d3_target_subscription);
+	orb_unsubscribe(sensor_combined_subscription);
+	orb_unsubscribe(vehicle_gps_position_subscription);
+	orb_unsubscribe(optical_flow_subscription);
 }
 
 int UOrbBridge::getVehicleAttitudeSubscription() {
@@ -71,7 +81,16 @@ void UOrbBridge::update() {
 		orb_copy(ORB_ID(actuator_armed), actuator_armed_subscription, &actuator_armed);
 	}
 	if (needsUpdate(d3_target_subscription)) {
-		orb_copy(ORB_ID(actuator_armed), d3_target_subscription, &d3_target);
+		orb_copy(ORB_ID(d3_target), d3_target_subscription, &d3_target);
+	}
+	if (needsUpdate(sensor_combined_subscription)) {
+		orb_copy(ORB_ID(sensor_combined), sensor_combined_subscription, &sensor_combined);
+	}
+	if (needsUpdate(vehicle_gps_position_subscription)) {
+		orb_copy(ORB_ID(vehicle_gps_position), vehicle_gps_position_subscription, &vehicle_gps_position);
+	}
+	if (needsUpdate(optical_flow_subscription)) {
+		orb_copy(ORB_ID(optical_flow), optical_flow_subscription, &optical_flow);
 	}
 }
 
@@ -89,6 +108,7 @@ MulticopterPositionControlD3::MulticopterPositionControlD3() :
 		_task_should_exit(false),
 		_mavlink_fd(-1),
 		uorb(nullptr) {
+	memset(&state, 0, sizeof(state));
 }
 
 MulticopterPositionControlD3::~MulticopterPositionControlD3() {
@@ -117,6 +137,51 @@ void MulticopterPositionControlD3::initialize() {
 	state.armed = false;
 	state.fds[0].fd = uorb->getVehicleAttitudeSubscription();
 	state.fds[0].events = POLLIN;
+	state.R.identity();
+}
+
+void MulticopterPositionControlD3::publishAttitudeSetpoint() {
+	uorb->vehicle_attitude_setpoint.roll_body = state.rollSetpoint;
+	uorb->vehicle_attitude_setpoint.pitch_body = state.pitchSetpoint;
+	uorb->vehicle_attitude_setpoint.yaw_body = state.yawSetpoint;
+	uorb->vehicle_attitude_setpoint.thrust = state.thrustSetpoint;
+	state.R.from_euler(state.rollSetpoint, state.pitchSetpoint, state.yawSetpoint);
+	memcpy(&uorb->vehicle_attitude_setpoint.R_body[0][0], state.R.data, sizeof(uorb->vehicle_attitude_setpoint.R_body));
+	uorb->vehicle_attitude_setpoint.R_valid = true;
+	uorb->vehicle_attitude_setpoint.timestamp = hrt_absolute_time();
+	uorb->publish();
+}
+
+void MulticopterPositionControlD3::resetSetpointsOnArming() {
+	if (uorb->vehicle_control_mode.flag_armed && !state.armed) {
+		state.rollSetpoint = uorb->vehicle_attitude.roll;
+		state.pitchSetpoint = uorb->vehicle_attitude.pitch;
+		state.yawSetpoint = uorb->vehicle_attitude.yaw;
+	}
+	state.armed = uorb->vehicle_control_mode.flag_armed;
+}
+
+bool MulticopterPositionControlD3::checkEnablement() {
+	return uorb->vehicle_control_mode.flag_control_altitude_enabled || //
+			uorb->vehicle_control_mode.flag_control_position_enabled || //
+			uorb->vehicle_control_mode.flag_control_climb_rate_enabled || //
+			uorb->vehicle_control_mode.flag_control_velocity_enabled;
+}
+
+void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
+	state.manualX = uorb->manual_control_setpoint.x;
+	state.manualY = uorb->manual_control_setpoint.y;
+	state.manualZ = uorb->manual_control_setpoint.z;
+	state.manualR = uorb->manual_control_setpoint.r;
+	state.manualXYinput = !isnan(state.manualX) && !isnan(state.manualY) && !isnan(state.manualZ) && !isnan(state.manualR) && (fabsf(state.manualX) > 0.01f || fabsf(state.manualY) > 0.01f);
+	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
+		state.thrustSetpoint = state.manualZ;
+		state.yawSetpoint = _wrap_pi(state.yawSetpoint + state.manualR * dt);
+		if (state.manualXYinput) {
+			state.rollSetpoint = state.manualY * 0.6f;
+			state.pitchSetpoint = -state.manualX * 0.6f;
+		}
+	}
 }
 
 void MulticopterPositionControlD3::doLoop() {
@@ -124,20 +189,11 @@ void MulticopterPositionControlD3::doLoop() {
 	hrt_abstime currrentTimestamp = hrt_absolute_time();
 	float dt = state.lastTimestamp != 0 ? (currrentTimestamp - state.lastTimestamp) * 0.000001f : 0.0f;
 	state.lastTimestamp = currrentTimestamp;
-	if (uorb->vehicle_control_mode.flag_armed && !state.armed) {
-		/* reset setpoints and integrals on arming */
+	resetSetpointsOnArming();
+	if (checkEnablement()) {
+		applyRCInputIfAvailable(dt);
+		publishAttitudeSetpoint();
 	}
-	state.armed = uorb->vehicle_control_mode.flag_armed;
-	if (uorb->vehicle_control_mode.flag_control_altitude_enabled || //
-			uorb->vehicle_control_mode.flag_control_position_enabled || //
-			uorb->vehicle_control_mode.flag_control_climb_rate_enabled || //
-			uorb->vehicle_control_mode.flag_control_velocity_enabled) {
-		state.manualXYinput = fabsf(uorb->manual_control_setpoint.x) > 0.01f || fabsf(uorb->manual_control_setpoint.y) > 0.01f;
-		/* select control source */
-		if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
-		}
-	}
-	if (dt < 0.001f) ;
 }
 
 void MulticopterPositionControlD3::main_loop() {

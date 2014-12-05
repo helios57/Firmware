@@ -11,7 +11,7 @@ mavlink stream -d /dev/ttyACM0 -s MISSION_ITEM -r 50
 usleep 100000
 mavlink stream -d /dev/ttyACM0 -s NAMED_VALUE_FLOAT -r 10
 usleep 100000
-mavlink stream -d /dev/ttyACM0 -s OPTICAL_FLOW -r 10
+mavlink stream -d /dev/ttyACM0 -s OPTICAL_FLOW_RAD -r 10
 usleep 100000
 mavlink stream -d /dev/ttyACM0 -s VFR_HUD -r 20
 usleep 100000
