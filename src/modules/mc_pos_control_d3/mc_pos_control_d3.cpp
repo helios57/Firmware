@@ -154,8 +154,8 @@ void MulticopterPositionControlD3::publishAttitudeSetpoint() {
 
 void MulticopterPositionControlD3::resetSetpointsOnArming() {
 	if (uorb->vehicle_control_mode.flag_armed && !state.armed) {
-		state.rollSetpoint = uorb->vehicle_attitude.roll;
-		state.pitchSetpoint = uorb->vehicle_attitude.pitch;
+		state.rollSetpoint = 0.0f;
+		state.pitchSetpoint = 0.0f;
 		state.yawSetpoint = uorb->vehicle_attitude.yaw;
 	}
 	state.armed = uorb->vehicle_control_mode.flag_armed;
@@ -177,11 +177,16 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
 		state.thrustSetpoint = state.manualZ;
 		state.yawSetpoint = _wrap_pi(state.yawSetpoint + state.manualR * dt);
-		if (state.manualXYinput) {
-			state.rollSetpoint = state.manualY * 0.6f;
-			state.pitchSetpoint = -state.manualX * 0.6f;
-		}
+		state.rollSetpoint = state.manualY * 0.6f;
+		state.pitchSetpoint = -state.manualX * 0.6f;
 	}
+}
+
+bool MulticopterPositionControlD3::newTargetDetected() {
+	uint64_t timestampExternal = uorb->d3_target.timestamp;
+	bool newTargetDetection = timestampExternal != state.targetLastTimestampExternal;
+	state.targetLastTimestampExternal = timestampExternal;
+	return newTargetDetection;
 }
 
 void MulticopterPositionControlD3::doLoop() {
@@ -192,6 +197,20 @@ void MulticopterPositionControlD3::doLoop() {
 	resetSetpointsOnArming();
 	if (checkEnablement()) {
 		applyRCInputIfAvailable(dt);
+
+		if (!state.manualXYinput) {
+			if (newTargetDetected()) {
+				state.targetLastTimestampLocal = currrentTimestamp;
+			}
+			//accept 1s old target
+			if (currrentTimestamp - state.targetLastTimestampLocal < 1000000) {
+				float targetRadX = uorb->d3_target.x;
+				float targetRadY = uorb->d3_target.y;
+				state.rollSetpoint = targetRadX * 0.5f;
+				state.pitchSetpoint = targetRadY * 0.5f;
+			}
+		}
+
 		publishAttitudeSetpoint();
 	}
 }

@@ -81,6 +81,8 @@ namespace pos_control_d3 {
 					float manualY;
 					float manualZ;
 					float manualR;
+					uint64_t targetLastTimestampExternal;
+					uint64_t targetLastTimestampLocal;
 			} state;
 			int _control_task; /**< task handle for task */
 			bool _task_should_exit; /**< if true, task should exit */
@@ -95,6 +97,7 @@ namespace pos_control_d3 {
 			void publishAttitudeSetpoint();
 			void resetSetpointsOnArming();bool checkEnablement();
 			void applyRCInputIfAvailable(float dt);
+bool newTargetDetected();
 	};
 } /* namespace pos_control_d3 */
 
