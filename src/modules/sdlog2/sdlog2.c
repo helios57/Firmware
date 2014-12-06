@@ -147,12 +147,12 @@ PARAM_DEFINE_INT32(SDLOG_EXT, -1);
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 
-static bool main_thread_should_exit = false;		/**< Deamon exit flag */
-static bool thread_running = false;			/**< Deamon status flag */
-static int deamon_task;						/**< Handle of deamon task / thread */
-static bool logwriter_should_exit = false;	/**< Logwriter thread exit flag */
-static const unsigned MAX_NO_LOGFOLDER = 999;	/**< Maximum number of log dirs */
-static const unsigned MAX_NO_LOGFILE = 999;		/**< Maximum number of log files */
+static bool main_thread_should_exit = false; /**< Deamon exit flag */
+static bool thread_running = false; /**< Deamon status flag */
+static int deamon_task; /**< Handle of deamon task / thread */
+static bool logwriter_should_exit = false; /**< Logwriter thread exit flag */
+static const unsigned MAX_NO_LOGFOLDER = 999; /**< Maximum number of log dirs */
+static const unsigned MAX_NO_LOGFILE = 999; /**< Maximum number of log files */
 static const int LOG_BUFFER_SIZE_DEFAULT = 8192;
 static const int MAX_WRITE_CHUNK = 512;
 static const int MIN_BYTES_TO_WRITE = 512;
@@ -261,20 +261,18 @@ static int open_log_file(void);
 
 static int open_perf_file(const char* str);
 
-static void
-sdlog2_usage(const char *reason)
-{
+static void sdlog2_usage(const char *reason) {
 	if (reason) {
 		fprintf(stderr, "%s\n", reason);
 	}
 
 	errx(1, "usage: sdlog2 {start|stop|status} [-r <log rate>] [-b <buffer size>] -e -a -t -x\n"
-		 "\t-r\tLog rate in Hz, 0 means unlimited rate\n"
-		 "\t-b\tLog buffer size in KiB, default is 8\n"
-		 "\t-e\tEnable logging by default (if not, can be started by command)\n"
-		 "\t-a\tLog only when armed (can be still overriden by command)\n"
-		 "\t-t\tUse date/time for naming log directories and files\n"
-		 "\t-x\tExtended logging");
+			"\t-r\tLog rate in Hz, 0 means unlimited rate\n"
+			"\t-b\tLog buffer size in KiB, default is 8\n"
+			"\t-e\tEnable logging by default (if not, can be started by command)\n"
+			"\t-a\tLog only when armed (can be still overriden by command)\n"
+			"\t-t\tUse date/time for naming log directories and files\n"
+			"\t-x\tExtended logging");
 }
 
 /**
@@ -285,8 +283,7 @@ sdlog2_usage(const char *reason)
  * The actual stack size should be set in the call
  * to task_spawn().
  */
-int sdlog2_main(int argc, char *argv[])
-{
+int sdlog2_main(int argc, char *argv[]) {
 	if (argc < 2) {
 		sdlog2_usage("missing command");
 	}
@@ -301,11 +298,8 @@ int sdlog2_main(int argc, char *argv[])
 
 		main_thread_should_exit = false;
 		deamon_task = task_spawn_cmd("sdlog2",
-						 SCHED_DEFAULT,
-						 SCHED_PRIORITY_DEFAULT - 30,
-						 3000,
-						 sdlog2_thread_main,
-						 (const char **)argv);
+		SCHED_DEFAULT,
+		SCHED_PRIORITY_DEFAULT - 30, 3000, sdlog2_thread_main, (const char **) argv);
 		exit(0);
 	}
 
@@ -322,7 +316,8 @@ int sdlog2_main(int argc, char *argv[])
 		if (thread_running) {
 			sdlog2_status();
 
-		} else {
+		}
+		else {
 			warnx("not started\n");
 		}
 
@@ -333,8 +328,7 @@ int sdlog2_main(int argc, char *argv[])
 	exit(1);
 }
 
-int create_log_dir()
-{
+int create_log_dir() {
 	/* create dir on sdcard if needed */
 	uint16_t dir_number = 1; // start with dir sess001
 	int mkdir_ret;
@@ -351,12 +345,14 @@ int create_log_dir()
 		if (mkdir_ret == OK) {
 			warnx("log dir created: %s", log_dir);
 
-		} else if (errno != EEXIST) {
+		}
+		else if (errno != EEXIST) {
 			warn("failed creating new dir: %s", log_dir);
 			return -1;
 		}
 
-	} else {
+	}
+	else {
 		/* look for the next dir that does not exist */
 		while (dir_number <= MAX_NO_LOGFOLDER) {
 			/* format log dir: e.g. /fs/microsd/sess001 */
@@ -367,7 +363,8 @@ int create_log_dir()
 				warnx("log dir created: %s", log_dir);
 				break;
 
-			} else if (errno != EEXIST) {
+			}
+			else if (errno != EEXIST) {
 				warn("failed creating new dir: %s", log_dir);
 				return -1;
 			}
@@ -390,8 +387,7 @@ int create_log_dir()
 	return 0;
 }
 
-int open_log_file()
-{
+int open_log_file() {
 	/* string to hold the path to the log */
 	char log_file_name[32] = "";
 	char log_file_path[64] = "";
@@ -404,7 +400,8 @@ int open_log_file()
 		strftime(log_file_name, sizeof(log_file_name), "%H_%M_%S.bin", &t);
 		snprintf(log_file_path, sizeof(log_file_path), "%s/%s", log_dir, log_file_name);
 
-	} else {
+	}
+	else {
 		uint16_t file_number = 1; // start with file log001
 
 		/* look for the next file that does not exist */
@@ -433,7 +430,8 @@ int open_log_file()
 		warn("failed opening log: %s", log_file_name);
 		mavlink_log_critical(mavlink_fd, "[sdlog2] failed opening log: %s", log_file_name);
 
-	} else {
+	}
+	else {
 		warnx("log file: %s", log_file_name);
 		mavlink_log_info(mavlink_fd, "[sdlog2] log file: %s", log_file_name);
 	}
@@ -441,8 +439,7 @@ int open_log_file()
 	return fd;
 }
 
-int open_perf_file(const char* str)
-{
+int open_perf_file(const char* str) {
 	/* string to hold the path to the log */
 	char log_file_name[32] = "";
 	char log_file_path[64] = "";
@@ -455,7 +452,8 @@ int open_perf_file(const char* str)
 		strftime(log_file_name, sizeof(log_file_name), "perf%H_%M_%S.txt", &t);
 		snprintf(log_file_path, sizeof(log_file_path), "%s/%s_%s", log_dir, str, log_file_name);
 
-	} else {
+	}
+	else {
 		unsigned file_number = 1; // start with file log001
 
 		/* look for the next file that does not exist */
@@ -484,7 +482,8 @@ int open_perf_file(const char* str)
 		warn("failed opening log: %s", log_file_name);
 		mavlink_log_critical(mavlink_fd, "[sdlog2] failed opening log: %s", log_file_name);
 
-	} else {
+	}
+	else {
 		warnx("log file: %s", log_file_name);
 		mavlink_log_info(mavlink_fd, "[sdlog2] log file: %s", log_file_name);
 	}
@@ -492,8 +491,7 @@ int open_perf_file(const char* str)
 	return fd;
 }
 
-static void *logwriter_thread(void *arg)
-{
+static void *logwriter_thread(void *arg) {
 	/* set name */
 	prctl(PR_SET_NAME, "sdlog2_writer", 0);
 
@@ -505,7 +503,7 @@ static void *logwriter_thread(void *arg)
 		return NULL;
 	}
 
-	struct logbuffer_s *logbuf = (struct logbuffer_s *)arg;
+	struct logbuffer_s *logbuf = (struct logbuffer_s *) arg;
 
 	/* write log messages formats, version and parameters */
 	log_bytes_written += write_formats(log_fd);
@@ -526,7 +524,7 @@ static void *logwriter_thread(void *arg)
 
 	bool is_part = false;
 
-	while (true) {
+	while (true ) {
 		/* make sure threads are synchronized */
 		pthread_mutex_lock(&logbuffer_mutex);
 
@@ -552,7 +550,8 @@ static void *logwriter_thread(void *arg)
 			if (available > MAX_WRITE_CHUNK) {
 				n = MAX_WRITE_CHUNK;
 
-			} else {
+			}
+			else {
 				n = available;
 			}
 
@@ -571,7 +570,8 @@ static void *logwriter_thread(void *arg)
 				log_bytes_written += n;
 			}
 
-		} else {
+		}
+		else {
 			n = 0;
 
 			/* exit only with empty buffer */
@@ -597,8 +597,7 @@ static void *logwriter_thread(void *arg)
 	return NULL;
 }
 
-void sdlog2_start_log()
-{
+void sdlog2_start_log() {
 	warnx("start logging");
 	mavlink_log_info(mavlink_fd, "[sdlog2] start logging");
 
@@ -620,7 +619,7 @@ void sdlog2_start_log()
 	struct sched_param param;
 	/* low priority, as this is expensive disk I/O */
 	param.sched_priority = SCHED_PRIORITY_DEFAULT - 40;
-	(void)pthread_attr_setschedparam(&logwriter_attr, &param);
+	(void) pthread_attr_setschedparam(&logwriter_attr, &param);
 
 	pthread_attr_setstacksize(&logwriter_attr, 2048);
 
@@ -643,8 +642,7 @@ void sdlog2_start_log()
 	logging_enabled = true;
 }
 
-void sdlog2_stop_log()
-{
+void sdlog2_stop_log() {
 	warnx("stop logging");
 	mavlink_log_info(mavlink_fd, "[sdlog2] stop logging");
 
@@ -676,15 +674,14 @@ void sdlog2_stop_log()
 	sdlog2_status();
 }
 
-int write_formats(int fd)
-{
+int write_formats(int fd) {
 	/* construct message format packet */
 	struct {
-		LOG_PACKET_HEADER;
+		LOG_PACKET_HEADER
+		;
 		struct log_format_s body;
 	} log_msg_format = {
-		LOG_PACKET_HEADER_INIT(LOG_FORMAT_MSG),
-	};
+	LOG_PACKET_HEADER_INIT(LOG_FORMAT_MSG), };
 
 	int written = 0;
 
@@ -697,15 +694,14 @@ int write_formats(int fd)
 	return written;
 }
 
-int write_version(int fd)
-{
+int write_version(int fd) {
 	/* construct version message */
 	struct {
-		LOG_PACKET_HEADER;
+		LOG_PACKET_HEADER
+		;
 		struct log_VER_s body;
 	} log_msg_VER = {
-		LOG_PACKET_HEADER_INIT(LOG_VER_MSG),
-	};
+	LOG_PACKET_HEADER_INIT(LOG_VER_MSG), };
 
 	/* fill version message and write it */
 	strncpy(log_msg_VER.body.fw_git, FW_GIT, sizeof(log_msg_VER.body.fw_git));
@@ -713,15 +709,14 @@ int write_version(int fd)
 	return write(fd, &log_msg_VER, sizeof(log_msg_VER));
 }
 
-int write_parameters(int fd)
-{
+int write_parameters(int fd) {
 	/* construct parameter message */
 	struct {
-		LOG_PACKET_HEADER;
+		LOG_PACKET_HEADER
+		;
 		struct log_PARM_s body;
 	} log_msg_PARM = {
-		LOG_PACKET_HEADER_INIT(LOG_PARM_MSG),
-	};
+	LOG_PACKET_HEADER_INIT(LOG_PARM_MSG), };
 
 	int written = 0;
 	param_t params_cnt = param_count();
@@ -732,19 +727,19 @@ int write_parameters(int fd)
 		float value = NAN;
 
 		switch (param_type(param)) {
-		case PARAM_TYPE_INT32: {
+			case PARAM_TYPE_INT32: {
 				int32_t i;
 				param_get(param, &i);
 				value = i;	// cast integer to float
 				break;
 			}
 
-		case PARAM_TYPE_FLOAT:
-			param_get(param, &value);
-			break;
+			case PARAM_TYPE_FLOAT:
+				param_get(param, &value);
+				break;
 
-		default:
-			break;
+			default:
+				break;
 		}
 
 		log_msg_PARM.body.value = value;
@@ -754,8 +749,7 @@ int write_parameters(int fd)
 	return written;
 }
 
-bool copy_if_updated(orb_id_t topic, int handle, void *buffer)
-{
+bool copy_if_updated(orb_id_t topic, int handle, void *buffer) {
 	bool updated;
 
 	orb_check(handle, &updated);
@@ -767,8 +761,7 @@ bool copy_if_updated(orb_id_t topic, int handle, void *buffer)
 	return updated;
 }
 
-int sdlog2_thread_main(int argc, char *argv[])
-{
+int sdlog2_thread_main(int argc, char *argv[]) {
 	mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
 
 	if (mavlink_fd < 0) {
@@ -798,7 +791,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 	while ((ch = getopt(argc, argv, "r:b:eatx")) != EOF) {
 		switch (ch) {
-		case 'r': {
+			case 'r': {
 				unsigned long r = strtoul(optarg, NULL, 10);
 
 				if (r == 0) {
@@ -807,9 +800,9 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 				sleep_delay = 1000000 / r;
 			}
-			break;
+				break;
 
-		case 'b': {
+			case 'b': {
 				unsigned long s = strtoul(optarg, NULL, 10);
 
 				if (s < 1) {
@@ -818,41 +811,43 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 				log_buffer_size = 1024 * s;
 			}
-			break;
+				break;
 
-		case 'e':
-			log_on_start = true;
-			break;
+			case 'e':
+				log_on_start = true;
+				break;
 
-		case 'a':
-			log_when_armed = true;
-			break;
+			case 'a':
+				log_when_armed = true;
+				break;
 
-		case 't':
-			log_name_timestamp = true;
-			break;
+			case 't':
+				log_name_timestamp = true;
+				break;
 
-		case 'x':
-			_extended_logging = true;
-			break;
+			case 'x':
+				_extended_logging = true;
+				break;
 
-		case '?':
-			if (optopt == 'c') {
-				warnx("option -%c requires an argument", optopt);
+			case '?':
+				if (optopt == 'c') {
+					warnx("option -%c requires an argument", optopt);
 
-			} else if (isprint(optopt)) {
-				warnx("unknown option `-%c'", optopt);
+				}
+				else if (isprint(optopt)) {
+					warnx("unknown option `-%c'", optopt);
 
-			} else {
-				warnx("unknown option character `\\x%x'", optopt);
-			}
-			err_flag = true;
-			break;
+				}
+				else {
+					warnx("unknown option character `\\x%x'", optopt);
+				}
+				err_flag = true;
+				break;
 
-		default:
-			warnx("unrecognized flag");
-			err_flag = true;
-			break;
+			default:
+				warnx("unrecognized flag");
+				err_flag = true;
+				break;
 		}
 	}
 
@@ -878,7 +873,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 			}
 
 			sleep_delay = 1000000 / param_log_rate;
-		} else if (param_log_rate == 0) {
+		}
+		else if (param_log_rate == 0) {
 			/* we need at minimum 10 Hz to be able to see anything */
 			sleep_delay = 1000000 / 10;
 		}
@@ -893,7 +889,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 		if (param_log_extended > 0) {
 			_extended_logging = true;
-		} else if (param_log_extended == 0) {
+		}
+		else if (param_log_extended == 0) {
 			_extended_logging = false;
 		}
 		/* any other value means to ignore the parameter, so no else case */
@@ -972,7 +969,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 	/* log message buffer: header + body */
 #pragma pack(push, 1)
 	struct {
-		LOG_PACKET_HEADER;
+		LOG_PACKET_HEADER
+		;
 		union {
 			struct log_TIME_s log_TIME;
 			struct log_ATT_s log_ATT;
@@ -1011,8 +1009,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_ENCD_s log_ENCD;
 		} body;
 	} log_msg = {
-		LOG_PACKET_HEADER_INIT(0)
-	};
+	LOG_PACKET_HEADER_INIT(0) };
 #pragma pack(pop)
 	memset(&log_msg.body, 0, sizeof(log_msg.body));
 
@@ -1083,7 +1080,6 @@ int sdlog2_thread_main(int argc, char *argv[])
 	subs.encoders_sub = orb_subscribe(ORB_ID(encoders));
 
 	/* add new topics HERE */
-
 
 	for (int i = 0; i < TELEMETRY_STATUS_ORB_ID_NUM; i++) {
 		subs.telemetry_subs[i] = orb_subscribe(telemetry_status_orb_id[i]);
@@ -1224,7 +1220,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 					int satindex = buf.sat_info.svid[i] - 1;
 
 					/* handles index exceeding and wraps to to arithmetic errors */
-					if ((satindex >= 0) && (satindex < (int)log_max_snr)) {
+					if ((satindex >= 0) && (satindex < (int) log_max_snr)) {
 						/* map satellites by their ID so that logs from two receivers can be compared */
 						log_msg.body.log_GS0A.satellite_snr[satindex] = buf.sat_info.snr[i];
 					}
@@ -1242,7 +1238,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 					int satindex = buf.sat_info.svid[i] - 1 - log_max_snr;
 
 					/* handles index exceeding and wraps to to arithmetic errors */
-					if ((satindex >= 0) && (satindex < (int)log_max_snr)) {
+					if ((satindex >= 0) && (satindex < (int) log_max_snr)) {
 						/* map satellites by their ID so that logs from two receivers can be compared */
 						log_msg.body.log_GS0B.satellite_snr[satindex] = buf.sat_info.snr[i];
 					}
@@ -1367,15 +1363,6 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 		}
 
-		/* --- ATTITUDE SETPOINT --- */
-		if (copy_if_updated(ORB_ID(d3_target), subs.d3_target_sub, &buf.d3_target)) {
-			log_msg.msg_type = LOG_D3_TARGET_MSG;
-			log_msg.body.log_d3_target.timestamp = buf.d3_target.timestamp;
-			log_msg.body.log_d3_target.x = buf.d3_target.x;
-			log_msg.body.log_d3_target.y = buf.d3_target.y;
-			LOGBUFFER_WRITE_AND_COUNT(ATSP);
-		}
-
 		/* --- ATTITUDE --- */
 		if (copy_if_updated(ORB_ID(vehicle_attitude), subs.att_sub, &buf.att)) {
 			log_msg.msg_type = LOG_ATT_MSG;
@@ -1441,12 +1428,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_LPOS.ref_lat = buf.local_pos.ref_lat * 1e7;
 			log_msg.body.log_LPOS.ref_lon = buf.local_pos.ref_lon * 1e7;
 			log_msg.body.log_LPOS.ref_alt = buf.local_pos.ref_alt;
-			log_msg.body.log_LPOS.pos_flags = (buf.local_pos.xy_valid ? 1 : 0) |
-											  (buf.local_pos.z_valid ? 2 : 0) |
-											  (buf.local_pos.v_xy_valid ? 4 : 0) |
-											  (buf.local_pos.v_z_valid ? 8 : 0) |
-											  (buf.local_pos.xy_global ? 16 : 0) |
-											  (buf.local_pos.z_global ? 32 : 0);
+			log_msg.body.log_LPOS.pos_flags = (buf.local_pos.xy_valid ? 1 : 0) | (buf.local_pos.z_valid ? 2 : 0) | (buf.local_pos.v_xy_valid ? 4 : 0) | (buf.local_pos.v_z_valid ? 8 : 0) | (buf.local_pos.xy_global ? 16 : 0)
+					| (buf.local_pos.z_global ? 32 : 0);
 			log_msg.body.log_LPOS.landed = buf.local_pos.landed;
 			log_msg.body.log_LPOS.ground_dist_flags = (buf.local_pos.dist_bottom_valid ? 1 : 0);
 			log_msg.body.log_LPOS.eph = buf.local_pos.eph;
@@ -1477,7 +1460,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_GPOS.epv = buf.global_pos.epv;
 			if (buf.global_pos.terrain_alt_valid) {
 				log_msg.body.log_GPOS.terrain_alt = buf.global_pos.terrain_alt;
-			} else {
+			}
+			else {
 				log_msg.body.log_GPOS.terrain_alt = -1.0f;
 			}
 			LOGBUFFER_WRITE_AND_COUNT(GPOS);
@@ -1489,8 +1473,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 			if (buf.triplet.current.valid) {
 				log_msg.msg_type = LOG_GPSP_MSG;
 				log_msg.body.log_GPSP.nav_state = buf.triplet.nav_state;
-				log_msg.body.log_GPSP.lat = (int32_t)(buf.triplet.current.lat * 1e7d);
-				log_msg.body.log_GPSP.lon = (int32_t)(buf.triplet.current.lon * 1e7d);
+				log_msg.body.log_GPSP.lat = (int32_t) (buf.triplet.current.lat * 1e7d);
+				log_msg.body.log_GPSP.lon = (int32_t) (buf.triplet.current.lon * 1e7d);
 				log_msg.body.log_GPSP.alt = buf.triplet.current.alt;
 				log_msg.body.log_GPSP.yaw = buf.triplet.current.yaw;
 				log_msg.body.log_GPSP.type = buf.triplet.current.type;
@@ -1543,6 +1527,15 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_FLOW.quality = buf.flow.quality;
 			log_msg.body.log_FLOW.sensor_id = buf.flow.sensor_id;
 			LOGBUFFER_WRITE_AND_COUNT(FLOW);
+		}
+
+		/* --- D3 Target --- */
+		if (copy_if_updated(ORB_ID(d3_target), subs.d3_target_sub, &buf.d3_target)) {
+			log_msg.msg_type = LOG_D3_TARGET_MSG;
+			log_msg.body.log_d3_target.timestamp = buf.d3_target.timestamp;
+			log_msg.body.log_d3_target.x = buf.d3_target.x;
+			log_msg.body.log_d3_target.y = buf.d3_target.y;
+			LOGBUFFER_WRITE_AND_COUNT(ATSP);
 		}
 
 		/* --- RC CHANNELS --- */
@@ -1681,7 +1674,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_TECS.totalEnergyRate = buf.tecs_status.totalEnergyRate;
 			log_msg.body.log_TECS.energyDistributionRateSp = buf.tecs_status.energyDistributionRateSp;
 			log_msg.body.log_TECS.energyDistributionRate = buf.tecs_status.energyDistributionRate;
-			log_msg.body.log_TECS.mode = (uint8_t)buf.tecs_status.mode;
+			log_msg.body.log_TECS.mode = (uint8_t) buf.tecs_status.mode;
 			LOGBUFFER_WRITE_AND_COUNT(TECS);
 		}
 
@@ -1731,13 +1724,12 @@ int sdlog2_thread_main(int argc, char *argv[])
 	return 0;
 }
 
-void sdlog2_status()
-{
+void sdlog2_status() {
 	float kibibytes = log_bytes_written / 1024.0f;
 	float mebibytes = kibibytes / 1024.0f;
-	float seconds = ((float)(hrt_absolute_time() - start_time)) / 1000000.0f;
+	float seconds = ((float) (hrt_absolute_time() - start_time)) / 1000000.0f;
 
-	warnx("wrote %lu msgs, %4.2f MiB (average %5.3f KiB/s), skipped %lu msgs", log_msgs_written, (double)mebibytes, (double)(kibibytes / seconds), log_msgs_skipped);
+	warnx("wrote %lu msgs, %4.2f MiB (average %5.3f KiB/s), skipped %lu msgs", log_msgs_written, (double) mebibytes, (double) (kibibytes / seconds), log_msgs_skipped);
 	warnx("extended logging: %s", (_extended_logging) ? "ON" : "OFF");
 	mavlink_log_info(mavlink_fd, "[sdlog2] wrote %lu msgs, skipped %lu msgs", log_msgs_written, log_msgs_skipped);
 }
@@ -1745,14 +1737,12 @@ void sdlog2_status()
 /**
  * @return 0 if file exists
  */
-bool file_exist(const char *filename)
-{
+bool file_exist(const char *filename) {
 	struct stat buffer;
 	return stat(filename, &buffer) == 0;
 }
 
-int file_copy(const char *file_old, const char *file_new)
-{
+int file_copy(const char *file_old, const char *file_new) {
 	FILE *source, *target;
 	source = fopen(file_old, "r");
 	int ret = 0;
@@ -1791,33 +1781,32 @@ int file_copy(const char *file_old, const char *file_new)
 	return OK;
 }
 
-void handle_command(struct vehicle_command_s *cmd)
-{
+void handle_command(struct vehicle_command_s *cmd) {
 	int param;
 
 	/* request to set different system mode */
 	switch (cmd->command) {
 
-	case VEHICLE_CMD_PREFLIGHT_STORAGE:
-		param = (int)(cmd->param3);
+		case VEHICLE_CMD_PREFLIGHT_STORAGE:
+			param = (int) (cmd->param3);
 
-		if (param == 1)	{
-			sdlog2_start_log();
+			if (param == 1) {
+				sdlog2_start_log();
 
-		} else if (param == 0)	{
-			sdlog2_stop_log();
-		}
+			}
+			else if (param == 0) {
+				sdlog2_stop_log();
+			}
 
-		break;
+			break;
 
-	default:
-		/* silently ignore */
-		break;
+		default:
+			/* silently ignore */
+			break;
 	}
 }
 
-void handle_status(struct vehicle_status_s *status)
-{
+void handle_status(struct vehicle_status_s *status) {
 	// TODO use flag from actuator_armed here?
 	bool armed = status->arming_state == ARMING_STATE_ARMED || status->arming_state == ARMING_STATE_ARMED_ERROR;
 
@@ -1827,7 +1816,8 @@ void handle_status(struct vehicle_status_s *status)
 		if (flag_system_armed) {
 			sdlog2_start_log();
 
-		} else {
+		}
+		else {
 			sdlog2_stop_log();
 		}
 	}
