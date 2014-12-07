@@ -71,6 +71,7 @@ namespace pos_control_d3 {
 					struct pollfd fds[1]; /** wakeup source */
 					hrt_abstime lastTimestamp; //
 					bool armed; //
+					bool enabled; //
 					bool manualXYinput;
 					Matrix<3, 3> R;
 					float rollSetpoint;
@@ -95,9 +96,9 @@ namespace pos_control_d3 {
 			void initialize(); //
 			void doLoop();
 			void publishAttitudeSetpoint();
-			void resetSetpointsOnArming();bool checkEnablement();
-			void applyRCInputIfAvailable(float dt);
-bool newTargetDetected();
+			void resetSetpointsIfNeeded();bool checkEnablement();
+			void applyRCInputIfAvailable(float dt);bool newTargetDetected();
+			void applyTargetInput(hrt_abstime currrentTimestamp);
 	};
 } /* namespace pos_control_d3 */
 

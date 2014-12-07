@@ -152,13 +152,14 @@ void MulticopterPositionControlD3::publishAttitudeSetpoint() {
 	uorb->publish();
 }
 
-void MulticopterPositionControlD3::resetSetpointsOnArming() {
-	if (uorb->vehicle_control_mode.flag_armed && !state.armed) {
+void MulticopterPositionControlD3::resetSetpointsIfNeeded() {
+	if ((uorb->vehicle_control_mode.flag_armed && !state.armed) || (checkEnablement() && !state.enabled)) {
 		state.rollSetpoint = 0.0f;
 		state.pitchSetpoint = 0.0f;
 		state.yawSetpoint = uorb->vehicle_attitude.yaw;
 	}
 	state.armed = uorb->vehicle_control_mode.flag_armed;
+	state.enabled = checkEnablement();
 }
 
 bool MulticopterPositionControlD3::checkEnablement() {
@@ -177,8 +178,12 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
 		state.thrustSetpoint = state.manualZ;
 		state.yawSetpoint = _wrap_pi(state.yawSetpoint + state.manualR * dt);
-		state.rollSetpoint = state.manualY * 0.6f;
-		state.pitchSetpoint = -state.manualX * 0.6f;
+		if (fabsf(state.manualY) > 0.01f) {
+			state.rollSetpoint = state.manualY * 0.6f;
+		}
+		if (fabsf(state.manualX) > 0.01f) {
+			state.pitchSetpoint = -state.manualX * 0.6f;
+		}
 	}
 }
 
@@ -189,28 +194,34 @@ bool MulticopterPositionControlD3::newTargetDetected() {
 	return newTargetDetection;
 }
 
+void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestamp) {
+	if (!state.manualXYinput) {
+		if (newTargetDetected()) {
+			state.targetLastTimestampLocal = currrentTimestamp;
+		}
+		hrt_abstime targetAge = currrentTimestamp - state.targetLastTimestampLocal;
+		//accept 1s old target
+		if (targetAge < 1000000) {
+			float q = (1000000.0f - targetAge) / 2000000.0f; //0-0.5
+			float p = 1.0f - q;
+			float targetRadX = uorb->d3_target.x;
+			float targetRadY = uorb->d3_target.y;
+			state.rollSetpoint = state.rollSetpoint * p + targetRadX * q;
+			state.pitchSetpoint = state.pitchSetpoint * p + targetRadY * q;
+		}
+	}
+}
+
 void MulticopterPositionControlD3::doLoop() {
 	uorb->update();
 	hrt_abstime currrentTimestamp = hrt_absolute_time();
 	float dt = state.lastTimestamp != 0 ? (currrentTimestamp - state.lastTimestamp) * 0.000001f : 0.0f;
 	state.lastTimestamp = currrentTimestamp;
-	resetSetpointsOnArming();
+	resetSetpointsIfNeeded();
+	applyRCInputIfAvailable(dt);
+	applyTargetInput(currrentTimestamp);
+
 	if (checkEnablement()) {
-		applyRCInputIfAvailable(dt);
-
-		if (!state.manualXYinput) {
-			if (newTargetDetected()) {
-				state.targetLastTimestampLocal = currrentTimestamp;
-			}
-			//accept 1s old target
-			if (currrentTimestamp - state.targetLastTimestampLocal < 1000000) {
-				float targetRadX = uorb->d3_target.x;
-				float targetRadY = uorb->d3_target.y;
-				state.rollSetpoint = targetRadX * 0.5f;
-				state.pitchSetpoint = targetRadY * 0.5f;
-			}
-		}
-
 		publishAttitudeSetpoint();
 	}
 }
