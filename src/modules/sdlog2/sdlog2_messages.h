@@ -422,8 +422,8 @@ struct log_ENCD_s {
 	float vel1;
 };
 
-#define LOG_D3_TARGET_MSG 40
-struct log_d3_target_s {
+#define LOG_DTAR_MSG 40
+struct log_DTAR_s {
 	uint64_t timestamp;
 	float x;
 	float y;
@@ -472,7 +472,7 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(AIRS, "fff",			"IndSpeed,TrueSpeed,AirTemp"),
 	LOG_FORMAT(ARSP, "fff",			"RollRateSP,PitchRateSP,YawRateSP"),
 	LOG_FORMAT(FLOW, "hhfffBB",		"RawX,RawY,CompX,CompY,Dist,Q,SensID"),
-	LOG_FORMAT(D3_TARGET, "Qff",		"timestamp,x,y"),
+	LOG_FORMAT(DTAR, "Qff",		"DTimestamp,Dx,Dy"),
 	LOG_FORMAT(GPOS, "LLfffffff",		"Lat,Lon,Alt,VelN,VelE,VelD,EPH,EPV,TALT"),
 	LOG_FORMAT(GPSP, "BLLffBfbf",		"NavState,Lat,Lon,Alt,Yaw,Type,LoitR,LoitDir,PitMin"),
 	LOG_FORMAT(ESC, "HBBBHHffiffH",		"count,nESC,Conn,N,Ver,Adr,Volt,Amp,RPM,Temp,SetP,SetPRAW"),
