@@ -202,12 +202,15 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 		hrt_abstime targetAge = currrentTimestamp - state.targetLastTimestampLocal;
 		//accept 1s old target
 		if (targetAge < 1000000) {
-			float q = (1000000.0f - targetAge) / 2000000.0f; //0-0.5
-			float p = 1.0f - q;
+			float q = ((1000000.0f - targetAge) / 1000000.0f) * 0.3f; //0-1.0
 			float targetRadX = uorb->d3_target.x;
 			float targetRadY = uorb->d3_target.y;
-			state.rollSetpoint = state.rollSetpoint * p + targetRadX * q;
-			state.pitchSetpoint = state.pitchSetpoint * p + targetRadY * q;
+			state.rollSetpoint = -targetRadX * q;
+			state.pitchSetpoint = -targetRadY * q;
+		}
+		else {
+			state.rollSetpoint = 0.0f;
+			state.pitchSetpoint = 0.0f;
 		}
 	}
 }
@@ -218,6 +221,7 @@ void MulticopterPositionControlD3::doLoop() {
 	float dt = state.lastTimestamp != 0 ? (currrentTimestamp - state.lastTimestamp) * 0.000001f : 0.0f;
 	state.lastTimestamp = currrentTimestamp;
 	resetSetpointsIfNeeded();
+
 	applyRCInputIfAvailable(dt);
 	applyTargetInput(currrentTimestamp);
 

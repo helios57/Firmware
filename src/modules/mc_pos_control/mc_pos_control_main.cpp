@@ -67,6 +67,7 @@
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/d3_target.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -122,6 +123,7 @@ private:
 	int		_pos_sp_triplet_sub;	/**< position setpoint triplet */
 	int		_local_pos_sp_sub;		/**< offboard local position setpoint */
 	int		_global_vel_sp_sub;		/**< offboard global velocity setpoint */
+	int		_d3_target_sub;
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
@@ -136,6 +138,7 @@ private:
 	struct position_setpoint_triplet_s		_pos_sp_triplet;	/**< vehicle global position setpoint triplet */
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
+	struct d3_target_s	_d3_target;
 
 
 	struct {
@@ -189,6 +192,9 @@ private:
 	math::Vector<3> _vel_prev;			/**< velocity on previous step */
 	math::Vector<3> _vel_ff;
 	math::Vector<3> _sp_move_rate;
+
+	uint64_t lastTargetTimestampExternal;
+	uint64_t lastTargetTimestamp;
 
 	/**
 	 * Update our local parameter cache.
@@ -263,12 +269,6 @@ private:
 namespace pos_control
 {
 
-/* oddly, ERROR is not defined for c++ */
-#ifdef ERROR
-# undef ERROR
-#endif
-static const int ERROR = -1;
-
 MulticopterPositionControl	*g_control;
 }
 
@@ -288,6 +288,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_local_pos_sub(-1),
 	_pos_sp_triplet_sub(-1),
 	_global_vel_sp_sub(-1),
+	_d3_target_sub(-1),
 
 /* publications */
 	_att_sp_pub(-1),
@@ -299,7 +300,9 @@ MulticopterPositionControl::MulticopterPositionControl() :
 
 	_reset_pos_sp(true),
 	_reset_alt_sp(true),
-	_mode_auto(false)
+	_mode_auto(false),
+	lastTargetTimestampExternal(0),
+	lastTargetTimestamp(0)
 {
 	memset(&_att, 0, sizeof(_att));
 	memset(&_att_sp, 0, sizeof(_att_sp));
@@ -310,6 +313,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	memset(&_pos_sp_triplet, 0, sizeof(_pos_sp_triplet));
 	memset(&_local_pos_sp, 0, sizeof(_local_pos_sp));
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
+	memset(&_d3_target, 0, sizeof(_d3_target));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 
@@ -476,6 +480,12 @@ MulticopterPositionControl::poll_subscriptions()
 	if (updated) {
 		orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
 	}
+
+	orb_check(_d3_target_sub, &updated);
+
+	if (updated) {
+		orb_copy(ORB_ID(d3_target), _d3_target_sub, &_d3_target);
+	}
 }
 
 float
@@ -586,6 +596,26 @@ MulticopterPositionControl::control_manual(float dt)
 		/* move position setpoint with roll/pitch stick */
 		_sp_move_rate(0) = _manual.x;
 		_sp_move_rate(1) = _manual.y;
+
+
+		bool newTargetDetection = lastTargetTimestampExternal != _d3_target.timestamp;
+		lastTargetTimestampExternal = _d3_target.timestamp;
+		if (newTargetDetection){
+			lastTargetTimestamp = hrt_absolute_time();
+		}
+
+		bool manualXYinput = !isnan(_manual.x) && !isnan(_manual.y)  && (fabsf(_manual.x) > 0.01f || fabsf(_manual.y) > 0.01f);
+		if (!manualXYinput){
+			hrt_abstime targetAge = hrt_absolute_time() - lastTargetTimestamp;
+			//only accept target detection younger than 0.5 sec
+			if (targetAge < 500000) {
+				float q = ((500000.0f - targetAge) / 500000.0f) * 0.3f; //0-1.0
+				float targetRadX = _d3_target.x;
+				float targetRadY = _d3_target.y;
+				_sp_move_rate(0) = targetRadY * q;
+				_sp_move_rate(0) = -targetRadX * q;
+			}
+		}
 	}
 
 	/* limit setpoint move rate */
@@ -873,6 +903,7 @@ MulticopterPositionControl::task_main()
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
 	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
+	_d3_target_sub = orb_subscribe(ORB_ID(d3_target));
 
 
 	parameters_update(true);
