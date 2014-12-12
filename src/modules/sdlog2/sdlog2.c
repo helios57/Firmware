@@ -1526,6 +1526,9 @@ int sdlog2_thread_main(int argc, char *argv[]) {
 			log_msg.body.log_FLOW.pixel_flow_y_integral = buf.flow.pixel_flow_y_integral;
 			log_msg.body.log_FLOW.quality = buf.flow.quality;
 			log_msg.body.log_FLOW.sensor_id = buf.flow.sensor_id;
+			log_msg.body.log_FLOW.frame_count_since_last_readout = buf.flow.frame_count_since_last_readout;
+			log_msg.body.log_FLOW.time_since_last_sonar_update = buf.flow.time_since_last_sonar_update;
+			log_msg.body.log_FLOW.timestamp = buf.flow.timestamp;
 			LOGBUFFER_WRITE_AND_COUNT(FLOW);
 		}
 
