@@ -69,23 +69,23 @@ MODULES		+= modules/commander
 MODULES		+= modules/navigator
 MODULES		+= modules/mavlink
 MODULES		+= modules/gpio_led
-MODULES		+= modules/uavcan
+#MODULES		+= modules/uavcan
 
 #
 # Estimation modules (EKF/ SO3 / other filters)
 #
 MODULES		+= modules/attitude_estimator_ekf
 MODULES		+= modules/ekf_att_pos_estimator
-MODULES		+= modules/position_estimator_inav
+#MODULES		+= modules/position_estimator_inav
 
 #
 # Vehicle Control
 #
 #MODULES		+= modules/segway # XXX Needs GCC 4.7 fix
-MODULES		+= modules/fw_pos_control_l1
-MODULES		+= modules/fw_att_control
+#MODULES		+= modules/fw_pos_control_l1
+#MODULES		+= modules/fw_att_control
 MODULES		+= modules/mc_att_control
-MODULES		+= modules/mc_pos_control
+#MODULES		+= modules/mc_pos_control
 MODULES		+= modules/mc_pos_control_d3
 
 #

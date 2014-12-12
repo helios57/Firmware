@@ -82,6 +82,11 @@ namespace pos_control_d3 {
 					float manualY;
 					float manualZ;
 					float manualR;
+					float groundDistLocal;
+					float groundDistLocalSP;
+					float groundDistMSL;
+					float groundDistBaroOffset;
+					float groundDistMSLOffset;
 					uint64_t targetLastTimestampExternal;
 					uint64_t targetLastTimestampLocal;
 			} state;
@@ -99,6 +104,8 @@ namespace pos_control_d3 {
 			void resetSetpointsIfNeeded();bool checkEnablement();
 			void applyRCInputIfAvailable(float dt);bool newTargetDetected();
 			void applyTargetInput(hrt_abstime currrentTimestamp);
+			float filterGroundDist(float groundDistLocalOld, float groundDistSonarM);
+			void calculateGroundDistance();
 	};
 } /* namespace pos_control_d3 */
 
