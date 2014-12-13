@@ -76,7 +76,7 @@ MODULES		+= modules/gpio_led
 #
 MODULES		+= modules/attitude_estimator_ekf
 MODULES		+= modules/ekf_att_pos_estimator
-#MODULES		+= modules/position_estimator_inav
+MODULES		+= modules/position_estimator_inav
 
 #
 # Vehicle Control
