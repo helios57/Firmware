@@ -38,4 +38,5 @@
 MODULE_COMMAND	= mc_pos_control_d3
 
 SRCS		= mc_pos_control_d3_main.cpp \
-			  mc_pos_control_d3.cpp
+			  mc_pos_control_d3.cpp \
+			  mc_pos_control_d3_params.c

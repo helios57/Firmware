@@ -14,6 +14,7 @@
 #include <systemlib/param/param.h>
 #include <mathlib/mathlib.h>
 #include <poll.h>
+#include <lib/geo/geo.h>
 #include <uORB/uORB.h>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_controls.h>
@@ -26,6 +27,8 @@
 #include <uORB/topics/sensor_combined.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/optical_flow.h>
+#include <uORB/topics/vehicle_local_position.h>
+#include <uORB/topics/vehicle_local_position_setpoint.h>
 
 using namespace math;
 
@@ -38,6 +41,7 @@ namespace pos_control_d3 {
 	class UOrbBridge {
 		private:
 			orb_advert_t vehicle_attitude_setpoint_publication; //lazy initialized on first publish
+			orb_advert_t vehicle_local_position_setpoint_publication; //lazy initialized on first publish
 			bool updated;
 			int vehicle_attitude_subscription;
 			int vehicle_attitude_setpoint_subscription;
@@ -47,8 +51,48 @@ namespace pos_control_d3 {
 			int d3_target_subscription;
 			int sensor_combined_subscription;
 			int vehicle_gps_position_subscription;
-			int optical_flow_subscription;bool needsUpdate(int attSub);
+			int optical_flow_subscription;
+			int vehicle_local_position_subscription;
+			int parameter_update_subscription; //
+			bool needsUpdate(int attSub);
+			void updateParams(bool force);
+
+			struct {
+					param_t thr_min;
+					param_t thr_max;
+					param_t z_p;
+					param_t z_vel_p;
+					param_t z_vel_i;
+					param_t z_vel_d;
+					param_t z_vel_max;
+					param_t z_ff;
+					param_t xy_p;
+					param_t xy_vel_p;
+					param_t xy_vel_i;
+					param_t xy_vel_d;
+					param_t xy_vel_max;
+					param_t xy_ff;
+					param_t tilt_max_air;
+					param_t land_speed;
+					param_t tilt_max_land;
+			} param_handles;
+
 		public:
+			struct {
+					float thr_min;
+					float thr_max;
+					float tilt_max_air;
+					float land_speed;
+					float tilt_max_land;
+
+					math::Vector<3> pos_p;
+					math::Vector<3> vel_p;
+					math::Vector<3> vel_i;
+					math::Vector<3> vel_d;
+					math::Vector<3> vel_ff;
+					math::Vector<3> vel_max;
+					math::Vector<3> sp_offs_max;
+			} params;
 			UOrbBridge();
 			~UOrbBridge();
 			struct vehicle_attitude_s vehicle_attitude;
@@ -60,6 +104,9 @@ namespace pos_control_d3 {
 			struct sensor_combined_s sensor_combined;
 			struct vehicle_gps_position_s vehicle_gps_position;
 			struct optical_flow_s optical_flow;
+			struct vehicle_local_position_s vehicle_local_position;
+			struct vehicle_local_position_setpoint_s vehicle_local_position_setpoint;
+			struct parameter_update_s parameter_update;
 			void update();/** updates all subsctions*/
 			void publish();/** publishes all outgoin messages*/
 			int getVehicleAttitudeSubscription();
@@ -89,13 +136,25 @@ namespace pos_control_d3 {
 					float groundDistMSLOffset;
 					uint64_t targetLastTimestampExternal;
 					uint64_t targetLastTimestampLocal;
+					hrt_abstime ref_timestamp;
+					struct map_projection_reference_s ref_pos;
+					float ref_alt;
+					math::Vector<3> pos;
+					math::Vector<3> pos_sp;
+					math::Vector<3> vel;
+					math::Vector<3> vel_sp;
+					math::Vector<3> vel_prev; /**< velocity on previous step */
+					math::Vector<3> vel_ff;
+					math::Vector<3> sp_move_rate;
 			} state;
+
 			int _control_task; /**< task handle for task */
 			bool _task_should_exit; /**< if true, task should exit */
 			MulticopterPositionControlD3();
 			~MulticopterPositionControlD3();
 			void main_loop();
 		private:
+			const float alt_ctl_dz = 0.2f;
 			int _mavlink_fd; /**< mavlink fd */
 			UOrbBridge *uorb;
 			void initialize(); //
@@ -106,6 +165,12 @@ namespace pos_control_d3 {
 			void applyTargetInput(hrt_abstime currrentTimestamp);
 			float filterGroundDist(float groundDistLocalOld, float groundDistSonarM);
 			void calculateGroundDistance();
+			float scale_control(float ctl, float end, float dz);
+			void update_ref();
+			void reset_pos_sp();
+			void reset_alt_sp();
+			void limit_pos_sp_offset();
+			void control_manual(float dt);
 	};
 } /* namespace pos_control_d3 */
 
