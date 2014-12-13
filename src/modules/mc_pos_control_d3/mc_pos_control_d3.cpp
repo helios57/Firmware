@@ -422,6 +422,7 @@ void MulticopterPositionControlD3::resetSetpointsIfNeeded() {
 		state.pitchSetpoint = 0.0f;
 		state.yawSetpoint = uorb->vehicle_attitude.yaw;
 		state.groundDistLocalSP = state.groundDistLocal;
+		state.thrustSetpoint = state.manualZ;
 	}
 	state.armed = uorb->vehicle_control_mode.flag_armed;
 	state.enabled = checkEnablement();
@@ -443,14 +444,15 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
 		//state.thrustSetpoint = state.manualZ;
 		float rcZ = state.manualZ - 0.5f;
-		if (fabsf(rcZ) > 0.2f) {
-			state.groundDistLocalSP += rcZ * dt;
+		if (fabsf(rcZ) > 0.2f && fabsf(state.groundDistLocalSP - state.groundDistLocal) < 9.9f) {
+			state.groundDistLocalSP += rcZ * dt * 0.5f;
 		}
 		state.yawSetpoint = _wrap_pi(state.yawSetpoint + state.manualR * dt);
 		state.rollSetpoint = state.manualY * 0.6f;
 		state.pitchSetpoint = -state.manualX * 0.6f;
 		float diff = state.groundDistLocalSP - state.groundDistLocal;
 		state.thrustSetpoint += min(diff * 0.1f, 0.1f);
+		state.thrustSetpoint = max(min(state.thrustSetpoint, 0.9f), 0.0f);
 	}
 }
 

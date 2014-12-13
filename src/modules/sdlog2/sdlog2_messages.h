@@ -471,7 +471,7 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(OUT0, "ffffffff",		"Out0,Out1,Out2,Out3,Out4,Out5,Out6,Out7"),
 	LOG_FORMAT(AIRS, "fff",			"IndSpeed,TrueSpeed,AirTemp"),
 	LOG_FORMAT(ARSP, "fff",			"RollRateSP,PitchRateSP,YawRateSP"),
-	LOG_FORMAT(FLOW, "QBffffffEEcB","Timestamp,SensorId,PxFlowX,PxFlowY,GyroX,GyroY,GyroZ,SonarM,ITimespan,TSonarUpdate,FrameCount,GyroTemp,Quality"),
+	LOG_FORMAT(FLOW, "QBffffffEEcB","tst,sid,fx,fy,gx,gy,gz,sonar,tspan,tsonar,fc,gtemp,quali"),
 	LOG_FORMAT(DTAR, "Qff",		"DTimestamp,Dx,Dy"),
 	LOG_FORMAT(GPOS, "LLfffffff",		"Lat,Lon,Alt,VelN,VelE,VelD,EPH,EPV,TALT"),
 	LOG_FORMAT(GPSP, "BLLffBfbf",		"NavState,Lat,Lon,Alt,Yaw,Type,LoitR,LoitDir,PitMin"),
