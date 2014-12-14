@@ -108,7 +108,8 @@ namespace pos_control_d3 {
 			struct vehicle_local_position_setpoint_s vehicle_local_position_setpoint;
 			struct parameter_update_s parameter_update;
 			void update();/** updates all subsctions*/
-			void publish();/** publishes all outgoin messages*/
+			void publishAttitudeSetpoint();
+			void publishLocalPositionSetpoint();
 			int getVehicleAttitudeSubscription();
 	};
 
@@ -124,7 +125,6 @@ namespace pos_control_d3 {
 					float rollSetpoint;
 					float pitchSetpoint;
 					float yawSetpoint;
-					float thrustSetpoint;
 					float manualX;
 					float manualY;
 					float manualZ;
@@ -144,8 +144,15 @@ namespace pos_control_d3 {
 					math::Vector<3> vel;
 					math::Vector<3> vel_sp;
 					math::Vector<3> vel_prev; /**< velocity on previous step */
-					math::Vector<3> vel_ff;
+					math::Vector<3> vel_feedforward;
 					math::Vector<3> sp_move_rate;
+					math::Vector<3> thrust_int;
+					math::Vector<3> thrust_sp;
+					math::Vector<3> pos_err;
+					math::Vector<3> vel_err;
+					float thrust_abs;
+					bool saturation_xy;
+					bool saturation_z;
 			} state;
 
 			int _control_task; /**< task handle for task */
@@ -159,7 +166,6 @@ namespace pos_control_d3 {
 			UOrbBridge *uorb;
 			void initialize(); //
 			void doLoop();
-			void publishAttitudeSetpoint();
 			void resetSetpointsIfNeeded();bool checkEnablement();
 			void applyRCInputIfAvailable(float dt);bool newTargetDetected();
 			void applyTargetInput(hrt_abstime currrentTimestamp);
@@ -171,6 +177,12 @@ namespace pos_control_d3 {
 			void reset_alt_sp();
 			void limit_pos_sp_offset();
 			void control_manual(float dt);
+			void calculateAttitudeSP();
+			void publishAttitudeSP();
+			void updateIntegrals(float dt);
+			void limitMaxThrust();
+			void getLocalPos();
+			void fillAndPubishLocalPositionSP();
 	};
 } /* namespace pos_control_d3 */
 

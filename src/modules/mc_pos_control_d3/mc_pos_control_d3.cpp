@@ -182,13 +182,16 @@ void UOrbBridge::update() {
 	}
 }
 
-void UOrbBridge::publish() {
+void UOrbBridge::publishAttitudeSetpoint() {
 	if (vehicle_attitude_setpoint_publication > 0) {
 		orb_publish(ORB_ID(vehicle_attitude_setpoint), vehicle_attitude_setpoint_publication, &vehicle_attitude_setpoint);
 	}
 	else {
 		vehicle_attitude_setpoint_publication = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &vehicle_attitude_setpoint);
 	}
+}
+
+void UOrbBridge::publishLocalPositionSetpoint() {
 	if (vehicle_local_position_setpoint_publication > 0) {
 		orb_publish(ORB_ID(vehicle_local_position_setpoint), vehicle_local_position_setpoint_publication, &vehicle_local_position_setpoint);
 	}
@@ -203,15 +206,6 @@ MulticopterPositionControlD3::MulticopterPositionControlD3() :
 		_mavlink_fd(-1),
 		uorb(nullptr) {
 	memset(&state, 0, sizeof(state));
-	state.pos.zero();
-	state.pos_sp.zero();
-	state.vel.zero();
-	state.vel_sp.zero();
-	state.vel_prev.zero();
-	state.vel_ff.zero();
-	state.sp_move_rate.zero();
-	state.ref_alt = 0.0f;
-	state.ref_timestamp = 0.0f;
 }
 
 MulticopterPositionControlD3::~MulticopterPositionControlD3() {
@@ -241,18 +235,6 @@ void MulticopterPositionControlD3::initialize() {
 	state.fds[0].fd = uorb->getVehicleAttitudeSubscription();
 	state.fds[0].events = POLLIN;
 	state.R.identity();
-}
-
-void MulticopterPositionControlD3::publishAttitudeSetpoint() {
-	uorb->vehicle_attitude_setpoint.roll_body = state.rollSetpoint;
-	uorb->vehicle_attitude_setpoint.pitch_body = state.pitchSetpoint;
-	uorb->vehicle_attitude_setpoint.yaw_body = state.yawSetpoint;
-	uorb->vehicle_attitude_setpoint.thrust = state.thrustSetpoint;
-	state.R.from_euler(state.rollSetpoint, state.pitchSetpoint, state.yawSetpoint);
-	memcpy(&uorb->vehicle_attitude_setpoint.R_body[0][0], state.R.data, sizeof(uorb->vehicle_attitude_setpoint.R_body));
-	uorb->vehicle_attitude_setpoint.R_valid = true;
-	uorb->vehicle_attitude_setpoint.timestamp = hrt_absolute_time();
-	uorb->publish();
 }
 
 float MulticopterPositionControlD3::scale_control(float ctl, float end, float dz) {
@@ -379,18 +361,8 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 	R_yaw_sp.from_euler(0.0f, 0.0f, uorb->vehicle_attitude_setpoint.yaw_body);
 	state.sp_move_rate = R_yaw_sp * state.sp_move_rate.emult(uorb->params.vel_max);
 
-	if (uorb->vehicle_control_mode.flag_control_altitude_enabled) {
-		/* reset alt setpoint to current altitude if needed */
-		reset_alt_sp();
-	}
-
-	if (uorb->vehicle_control_mode.flag_control_position_enabled) {
-		/* reset position setpoint to current position if needed */
-		reset_pos_sp();
-	}
-
 	/* feed forward setpoint move rate with weight vel_ff */
-	state.vel_ff = state.sp_move_rate.emult(uorb->params.vel_ff);
+	state.vel_feedforward = state.sp_move_rate.emult(uorb->params.vel_ff);
 
 	/* move position setpoint */
 	state.pos_sp += state.sp_move_rate * dt;
@@ -422,7 +394,9 @@ void MulticopterPositionControlD3::resetSetpointsIfNeeded() {
 		state.pitchSetpoint = 0.0f;
 		state.yawSetpoint = uorb->vehicle_attitude.yaw;
 		state.groundDistLocalSP = state.groundDistLocal;
-		state.thrustSetpoint = state.manualZ;
+		reset_pos_sp();
+		reset_alt_sp();
+		state.thrust_int(2) = -state.manualZ;
 	}
 	state.armed = uorb->vehicle_control_mode.flag_armed;
 	state.enabled = checkEnablement();
@@ -442,17 +416,7 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 	state.manualR = uorb->manual_control_setpoint.r;
 	state.manualXYinput = !isnan(state.manualX) && !isnan(state.manualY) && !isnan(state.manualZ) && !isnan(state.manualR) && (fabsf(state.manualX) > 0.01f || fabsf(state.manualY) > 0.01f);
 	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
-		//state.thrustSetpoint = state.manualZ;
-		float rcZ = state.manualZ - 0.5f;
-		if (fabsf(rcZ) > 0.2f && fabsf(state.groundDistLocalSP - state.groundDistLocal) < 9.9f) {
-			state.groundDistLocalSP += rcZ * dt * 0.5f;
-		}
-		state.yawSetpoint = _wrap_pi(state.yawSetpoint + state.manualR * dt);
-		state.rollSetpoint = state.manualY * 0.6f;
-		state.pitchSetpoint = -state.manualX * 0.6f;
-		float diff = state.groundDistLocalSP - state.groundDistLocal;
-		state.thrustSetpoint += min(diff * 0.1f, 0.1f);
-		state.thrustSetpoint = max(min(state.thrustSetpoint, 0.9f), 0.0f);
+		control_manual(dt);
 	}
 }
 
@@ -515,18 +479,192 @@ void MulticopterPositionControlD3::calculateGroundDistance() {
 	}
 }
 
+void MulticopterPositionControlD3::calculateAttitudeSP() {
+	/* calculate attitude setpoint from thrust vector */
+	/* desired body_z axis = -normalize(thrust_vector) */
+	math::Vector<3> body_x;
+	math::Vector<3> body_y;
+	math::Vector<3> body_z;
+	if (state.thrust_abs > SIGMA) {
+		body_z = -state.thrust_sp / state.thrust_abs;
+	}
+	else {
+		/* no thrust, set Z axis to safe value */
+		body_z.zero();
+		body_z(2) = 1.0f;
+	}
+	/* vector of desired yaw direction in XY plane, rotated by PI/2 */
+	math::Vector<3> y_C(-sinf(uorb->vehicle_attitude_setpoint.yaw_body), cosf(uorb->vehicle_attitude_setpoint.yaw_body), 0.0f);
+	if (fabsf(body_z(2)) > SIGMA) {
+		/* desired body_x axis, orthogonal to body_z */
+		body_x = y_C % body_z;
+
+		/* keep nose to front while inverted upside down */
+		if (body_z(2) < 0.0f) {
+			body_x = -body_x;
+		}
+		body_x.normalize();
+	}
+	else {
+		/* desired thrust is in XY plane, set X downside to construct correct matrix,
+		 * but yaw component will not be used actually */
+		body_x.zero();
+		body_x(2) = 1.0f;
+	}
+	/* desired body_y axis */
+	body_y = body_z % body_x;
+	/* fill rotation matrix */
+	for (int i = 0; i < 3; i++) {
+		state.R(i, 0) = body_x(i);
+		state.R(i, 1) = body_y(i);
+		state.R(i, 2) = body_z(i);
+	}
+}
+
+void MulticopterPositionControlD3::publishAttitudeSP() {
+	/* copy rotation matrix to attitude setpoint topic */
+	memcpy(&uorb->vehicle_attitude_setpoint.R_body[0][0], state.R.data, sizeof(uorb->vehicle_attitude_setpoint.R_body));
+	uorb->vehicle_attitude_setpoint.R_valid = true;
+	/* calculate euler angles, for logging only, must not be used for control */
+	math::Vector<3> euler = state.R.to_euler();
+	uorb->vehicle_attitude_setpoint.roll_body = euler(0);
+	uorb->vehicle_attitude_setpoint.pitch_body = euler(1);
+	/* yaw already used to construct rot matrix, but actual rotation matrix can have different yaw near singularity */
+	uorb->vehicle_attitude_setpoint.thrust = state.thrust_abs;
+	uorb->vehicle_attitude_setpoint.timestamp = hrt_absolute_time();
+	uorb->publishAttitudeSetpoint();
+}
+
+void MulticopterPositionControlD3::updateIntegrals(float dt) {
+	/* update integrals */
+	if (!state.saturation_xy) {
+		state.thrust_int(0) += state.vel_err(0) * uorb->params.vel_i(0) * dt;
+		state.thrust_int(1) += state.vel_err(1) * uorb->params.vel_i(1) * dt;
+	}
+	if (!state.saturation_z) {
+		state.thrust_int(2) += state.vel_err(2) * uorb->params.vel_i(2) * dt;
+		/* protection against flipping on ground when landing */
+		if (state.thrust_int(2) > 0.0f) {
+			state.thrust_int(2) = 0.0f;
+		}
+	}
+}
+
+void MulticopterPositionControlD3::limitMaxThrust() {
+	/* limit thrust vector and check for saturation */
+	/* limit min lift */
+	float thr_min = uorb->params.thr_min;
+	float tilt_max = uorb->params.tilt_max_air;
+	/* limit min lift */
+	if (-state.thrust_sp(2) < thr_min) {
+		state.thrust_sp(2) = -thr_min;
+		state.saturation_z = true;
+	}
+
+	/* limit max tilt */
+	/* absolute horizontal thrust */
+	float thrust_sp_xy_len = math::Vector<2>(state.thrust_sp(0), state.thrust_sp(1)).length();
+	if (thrust_sp_xy_len > 0.01f) {
+		/* max horizontal thrust for given vertical thrust*/
+		float thrust_xy_max = -state.thrust_sp(2) * tanf(tilt_max);
+
+		if (thrust_sp_xy_len > thrust_xy_max) {
+			float k = thrust_xy_max / thrust_sp_xy_len;
+			state.thrust_sp(0) *= k;
+			state.thrust_sp(1) *= k;
+			state.saturation_xy = true;
+		}
+	}
+	/* limit max thrust */
+	state.thrust_abs = state.thrust_sp.length();
+	if (state.thrust_abs > uorb->params.thr_max) {
+		if (state.thrust_sp(2) < 0.0f) {
+			if (-state.thrust_sp(2) > uorb->params.thr_max) {
+				/* thrust Z component is too large, limit it */
+				state.thrust_sp(0) = 0.0f;
+				state.thrust_sp(1) = 0.0f;
+				state.thrust_sp(2) = -uorb->params.thr_max;
+				state.saturation_xy = true;
+				state.saturation_z = true;
+
+			}
+			else {
+				/* preserve thrust Z component and lower XY, keeping altitude is more important than position */
+				float thrust_xy_max = sqrtf(uorb->params.thr_max * uorb->params.thr_max - state.thrust_sp(2) * state.thrust_sp(2));
+				float thrust_xy_abs = math::Vector<2>(state.thrust_sp(0), state.thrust_sp(1)).length();
+				float k = thrust_xy_max / thrust_xy_abs;
+				state.thrust_sp(0) *= k;
+				state.thrust_sp(1) *= k;
+				state.saturation_xy = true;
+			}
+
+		}
+		else {
+			/* Z component is negative, going down, simply limit thrust vector */
+			float k = uorb->params.thr_max / state.thrust_abs;
+			state.thrust_sp *= k;
+			state.saturation_xy = true;
+			state.saturation_z = true;
+		}
+
+		state.thrust_abs = uorb->params.thr_max;
+	}
+}
+
+void MulticopterPositionControlD3::getLocalPos() {
+	vehicle_local_position_s localPos = uorb->vehicle_local_position;
+	state.pos(0) = localPos.x;
+	state.pos(1) = localPos.y;
+	state.pos(2) = localPos.z;
+	state.vel(0) = localPos.vx;
+	state.vel(1) = localPos.vy;
+	state.vel(2) = localPos.vz;
+	state.vel_feedforward.zero();
+	state.sp_move_rate.zero();
+}
+
+void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
+	/* fill local position setpoint */
+	uorb->vehicle_local_position_setpoint.timestamp = hrt_absolute_time();
+	uorb->vehicle_local_position_setpoint.x = state.pos_sp(0);
+	uorb->vehicle_local_position_setpoint.y = state.pos_sp(1);
+	uorb->vehicle_local_position_setpoint.z = state.pos_sp(2);
+	uorb->vehicle_local_position_setpoint.yaw = uorb->vehicle_attitude_setpoint.yaw_body;
+	uorb->publishLocalPositionSetpoint();
+}
+
 void MulticopterPositionControlD3::doLoop() {
 	uorb->update();
 	hrt_abstime currrentTimestamp = hrt_absolute_time();
 	float dt = state.lastTimestamp != 0 ? (currrentTimestamp - state.lastTimestamp) * 0.000001f : 0.0f;
 	state.lastTimestamp = currrentTimestamp;
 	resetSetpointsIfNeeded();
-	calculateGroundDistance();
-	applyRCInputIfAvailable(dt);
-	applyTargetInput(currrentTimestamp);
 
-	if (checkEnablement()) {
-		publishAttitudeSetpoint();
+	//calculateGroundDistance();
+	//applyTargetInput(currrentTimestamp);
+
+	update_ref();
+	getLocalPos();
+	applyRCInputIfAvailable(dt);
+	fillAndPubishLocalPositionSP();
+
+	if (state.enabled) {
+		/* run position & altitude controllers, calculate velocity setpoint */
+		state.pos_err = state.pos_sp - state.pos;
+		state.vel_err = state.vel_sp - state.vel;
+		state.vel_sp = state.pos_err.emult(uorb->params.pos_p) + state.vel_feedforward;
+
+		/* derivative of velocity error, not includes setpoint acceleration */
+		math::Vector<3> vel_err_d = (state.sp_move_rate - state.vel).emult(uorb->params.pos_p) - (state.vel - state.vel_prev) / dt;
+		state.vel_prev = state.vel;
+
+		/* thrust vector in NED frame */
+		state.thrust_sp = state.vel_err.emult(uorb->params.vel_p) + vel_err_d.emult(uorb->params.vel_d) + state.thrust_int;
+
+		limitMaxThrust();
+		updateIntegrals(dt);
+		calculateAttitudeSP();
+		publishAttitudeSP();
 	}
 }
 
