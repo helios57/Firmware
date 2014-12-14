@@ -196,7 +196,7 @@ void UOrbBridge::publishLocalPositionSetpoint() {
 		orb_publish(ORB_ID(vehicle_local_position_setpoint), vehicle_local_position_setpoint_publication, &vehicle_local_position_setpoint);
 	}
 	else {
-		vehicle_local_position_setpoint_publication = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &vehicle_local_position_setpoint);
+		vehicle_local_position_setpoint_publication = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &vehicle_local_position_setpoint);
 	}
 }
 
