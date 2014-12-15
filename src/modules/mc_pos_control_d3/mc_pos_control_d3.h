@@ -122,9 +122,6 @@ namespace pos_control_d3 {
 					bool enabled; //
 					bool manualXYinput;
 					Matrix<3, 3> R;
-					float rollSetpoint;
-					float pitchSetpoint;
-					float yawSetpoint;
 					float manualX;
 					float manualY;
 					float manualZ;
