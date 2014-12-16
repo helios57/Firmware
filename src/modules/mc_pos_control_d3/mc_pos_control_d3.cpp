@@ -422,6 +422,11 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 			}
 			state.pos_sp(0) = state.pos(0) + targetPosNED[1];
 			state.pos_sp(1) = state.pos(1) - targetPosNED[0];
+			state.sp_move_rate(0) = targetPosNED[1];
+			state.sp_move_rate(1) = -targetPosNED[0];
+
+			/* feed forward setpoint move rate with weight vel_ff */
+			state.vel_feedforward = state.sp_move_rate.emult(uorb->params.vel_ff);
 		}
 	}
 }
@@ -607,6 +612,7 @@ void MulticopterPositionControlD3::doLoop() {
 
 		/* run position & altitude controllers, calculate velocity setpoint */
 		state.pos_err = state.pos_sp - state.pos;
+
 		state.vel_sp = state.pos_err.emult(posP) + state.vel_feedforward;
 		state.vel_err = state.vel_sp - state.vel;
 
