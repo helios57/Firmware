@@ -413,7 +413,7 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 		hrt_abstime targetAge = currrentTimestamp - state.targetLastTimestampLocal;
 		//accept 1s old target
 		if (targetAge < 1000000) {
-			float q = ((1000000.0f - targetAge) / 1000000.0f) * 0.3f; //0-1.0
+			//float q = ((1000000.0f - targetAge) / 1000000.0f) * 0.3f; //0-1.0
 			float targetRadX = uorb->d3_target.x;
 			float targetRadY = uorb->d3_target.y;
 			float frame_m[3];
@@ -429,8 +429,9 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 				}
 			}
 
-			state.pos_sp[0] = state.pos[0] + targetPosNED[0];
-			state.pos_sp[1] = state.pos[1] + targetPosNED[1];
+			//todo check axes and signs
+			state.pos_sp(0) = state.pos(0) + targetPosNED[1];
+			state.pos_sp(1) = state.pos(1) - targetPosNED[0];
 		}
 	}
 }
@@ -621,6 +622,7 @@ void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
 
 void MulticopterPositionControlD3::doLoop() {
 	uorb->update();
+	uorb->updateParams(false);
 	hrt_abstime currrentTimestamp = hrt_absolute_time();
 	float dt = state.lastTimestamp != 0 ? (currrentTimestamp - state.lastTimestamp) * 0.000001f : 0.0f;
 	state.lastTimestamp = currrentTimestamp;
@@ -633,17 +635,20 @@ void MulticopterPositionControlD3::doLoop() {
 	fillAndPubishLocalPositionSP();
 
 	if (state.enabled) {
+		Vector<3> posP = uorb->params.pos_p;
+		Vector<3> velP = uorb->params.vel_p;
+		Vector<3> velD = uorb->params.vel_d;
+
 		/* run position & altitude controllers, calculate velocity setpoint */
 		state.pos_err = state.pos_sp - state.pos;
+		state.vel_sp = state.pos_err.emult(posP) + state.vel_feedforward;
 		state.vel_err = state.vel_sp - state.vel;
-		state.vel_sp = state.pos_err.emult(uorb->params.pos_p) + state.vel_feedforward;
 
 		/* derivative of velocity error, not includes setpoint acceleration */
-		math::Vector<3> vel_err_d = (state.sp_move_rate - state.vel).emult(uorb->params.pos_p) - (state.vel - state.vel_prev) / dt;
+		math::Vector<3> vel_err_d = (state.sp_move_rate - state.vel).emult(posP) - (state.vel - state.vel_prev) / dt;
 		state.vel_prev = state.vel;
-
 		/* thrust vector in NED frame */
-		state.thrust_sp = state.vel_err.emult(uorb->params.vel_p) + vel_err_d.emult(uorb->params.vel_d) + state.thrust_int;
+		state.thrust_sp = state.vel_err.emult(velP) + vel_err_d.emult(velD) + state.thrust_int;
 
 		limitMaxThrust();
 		updateIntegrals(dt);

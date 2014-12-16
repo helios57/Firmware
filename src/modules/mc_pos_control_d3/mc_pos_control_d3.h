@@ -55,7 +55,6 @@ namespace pos_control_d3 {
 			int vehicle_local_position_subscription;
 			int parameter_update_subscription; //
 			bool needsUpdate(int attSub);
-			void updateParams(bool force);
 
 			struct {
 					param_t thr_min;
@@ -108,6 +107,7 @@ namespace pos_control_d3 {
 			struct vehicle_local_position_setpoint_s vehicle_local_position_setpoint;
 			struct parameter_update_s parameter_update;
 			void update();/** updates all subsctions*/
+			void updateParams(bool force);
 			void publishAttitudeSetpoint();
 			void publishLocalPositionSetpoint();
 			int getVehicleAttitudeSubscription();
@@ -147,11 +147,8 @@ namespace pos_control_d3 {
 					math::Vector<3> thrust_sp;
 					math::Vector<3> pos_err;
 					math::Vector<3> vel_err;
-					float thrust_abs;
-					bool saturation_xy;
-					bool saturation_z;
+					float thrust_abs;bool saturation_xy;bool saturation_z;
 			} state;
-
 			int _control_task; /**< task handle for task */
 			bool _task_should_exit; /**< if true, task should exit */
 			MulticopterPositionControlD3();
