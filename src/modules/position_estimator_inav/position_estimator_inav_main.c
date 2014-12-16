@@ -553,8 +553,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					flow_ang[1] = -flow.pixel_flow_x_integral/(float)flow.integration_timespan*1000000.0f;//flow.flow_raw_x * params.flow_k / 1000.0f / flow_dt;
 					/* flow measurements vector */
 					float flow_m[3];
-					flow_m[0] = -flow_ang[0] * flow_dist;
-					flow_m[1] = -flow_ang[1] * flow_dist;
+					flow_m[0] = flow_ang[0] * flow_dist;
+					flow_m[1] = flow_ang[1] * flow_dist;
 					flow_m[2] = z_est[1];
 					/* velocity in NED */
 					float flow_v[2] = { 0.0f, 0.0f };
