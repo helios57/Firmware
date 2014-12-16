@@ -126,13 +126,6 @@ namespace pos_control_d3 {
 					float manualY;
 					float manualZ;
 					float manualR;
-					float groundDistLocal;
-					float groundDistLocalSP;
-					float groundDistMSL;
-					float groundDistBaroOffset;
-					float groundDistMSLOffset;
-					uint64_t targetLastTimestampExternal;
-					uint64_t targetLastTimestampLocal;
 					hrt_abstime ref_timestamp;
 					struct map_projection_reference_s ref_pos;
 					float ref_alt;
@@ -161,7 +154,7 @@ namespace pos_control_d3 {
 			void initialize(); //
 			void doLoop();
 			void resetSetpointsIfNeeded();bool checkEnablement();
-			void applyRCInputIfAvailable(float dt);bool newTargetDetected();
+			void applyRCInputIfAvailable(float dt);
 			void applyTargetInput(hrt_abstime currrentTimestamp);
 			float filterGroundDist(float groundDistLocalOld, float groundDistSonarM);
 			void calculateGroundDistance();

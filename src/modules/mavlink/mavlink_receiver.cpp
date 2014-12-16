@@ -889,7 +889,8 @@ MavlinkReceiver::handle_message_d3_target(mavlink_message_t *msg)
 	struct d3_target_s target;
 	memset(&target, 0, sizeof(target));
 
-	target.timestamp = t.timestamp;
+	target.timestampExternal = t.timestamp;
+	target.timestampInternal = hrt_absolute_time();
 	target.x = t.x;
 	target.y = t.y;
 

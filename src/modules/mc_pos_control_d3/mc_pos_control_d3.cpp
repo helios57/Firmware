@@ -371,7 +371,6 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 
 void MulticopterPositionControlD3::resetSetpointsIfNeeded() {
 	if ((uorb->vehicle_control_mode.flag_armed && !state.armed) || (checkEnablement() && !state.enabled)) {
-		state.groundDistLocalSP = state.groundDistLocal;
 		reset_pos_sp();
 		reset_alt_sp();
 		state.thrust_int(2) = -state.manualZ;
@@ -392,44 +391,35 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 	state.manualY = uorb->manual_control_setpoint.y;
 	state.manualZ = uorb->manual_control_setpoint.z;
 	state.manualR = uorb->manual_control_setpoint.r;
-	state.manualXYinput = !isnan(state.manualX) && !isnan(state.manualY) && !isnan(state.manualZ) && !isnan(state.manualR) && (fabsf(state.manualX) > 0.01f || fabsf(state.manualY) > 0.01f);
+	state.manualXYinput = fabsf(state.manualX) > 0.05f || fabsf(state.manualY) > 0.05f;
 	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
 		control_manual(dt);
 	}
 }
 
-bool MulticopterPositionControlD3::newTargetDetected() {
-	uint64_t timestampExternal = uorb->d3_target.timestamp;
-	bool newTargetDetection = timestampExternal != state.targetLastTimestampExternal;
-	state.targetLastTimestampExternal = timestampExternal;
-	return newTargetDetection;
-}
-
 void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestamp) {
 	if (!state.manualXYinput) {
-		if (newTargetDetected()) {
-			state.targetLastTimestampLocal = currrentTimestamp;
-		}
-		hrt_abstime targetAge = currrentTimestamp - state.targetLastTimestampLocal;
-		//accept 1s old target
-		if (targetAge < 1000000) {
-			//float q = ((1000000.0f - targetAge) / 1000000.0f) * 0.3f; //0-1.0
-			float targetRadX = uorb->d3_target.x;
-			float targetRadY = uorb->d3_target.y;
-			float frame_m[3];
-			frame_m[0] = targetRadX * state.groundDistLocal;
-			frame_m[1] = targetRadY * state.groundDistLocal;
-			frame_m[2] = state.groundDistLocal;
-			vehicle_attitude_s vehicleAttitude = uorb->vehicle_attitude;
+		d3_target_s d3Target = uorb->d3_target;
+		vehicle_attitude_s vehicleAttitude = uorb->vehicle_attitude;
+		hrt_abstime targetAge = currrentTimestamp - d3Target.timestampInternal;
+		vehicle_local_position_s vehicleLocalPosition = uorb->vehicle_local_position;
+		float distBottom = vehicleLocalPosition.dist_bottom;
 
-			float targetPosNED[3] = { 0.0f, 0.0f, 0.0f };
-			for (int i = 0; i < 3; i++) {
+		//accept 1s old target
+		if (targetAge < 1000000 && distBottom < 4.0f) {
+			float targetRadX = d3Target.x;
+			float targetRadY = d3Target.y;
+			float frame_m[3];
+			frame_m[0] = targetRadX * distBottom;
+			frame_m[1] = targetRadY * distBottom;
+			frame_m[2] = distBottom;
+
+			float targetPosNED[2] = { 0.0f, 0.0f };
+			for (int i = 0; i < 2; i++) {
 				for (int j = 0; j < 3; j++) {
 					targetPosNED[i] += vehicleAttitude.R[i][j] * frame_m[j];
 				}
 			}
-
-			//todo check axes and signs
 			state.pos_sp(0) = state.pos(0) + targetPosNED[1];
 			state.pos_sp(1) = state.pos(1) - targetPosNED[0];
 		}
@@ -441,29 +431,6 @@ float MulticopterPositionControlD3::filterGroundDist(float groundDistLocalOld, f
 	float p = 5.0f / (diff * 100.0f);
 	float newGroundDist = groundDistLocalOld * p + groundDistSonarM * (1 - p);
 	return newGroundDist;
-}
-
-void MulticopterPositionControlD3::calculateGroundDistance() {
-	float groundDistSonarM = uorb->optical_flow.ground_distance_m; //0.3 - 3.8 local
-	float groundDistBaroM = uorb->sensor_combined.baro_alt_meter; // global
-	float groundDistGPSM = uorb->vehicle_gps_position.alt / 1000.0f; // global
-	bool sonarValid = groundDistSonarM > 0.3f && groundDistSonarM < 3.8f;
-	bool gpsValid = uorb->vehicle_gps_position.fix_type >= 3;
-	float groundDistLocalOld = state.groundDistLocal;
-	if (gpsValid) {
-		state.groundDistMSL = groundDistGPSM;
-		state.groundDistBaroOffset = state.groundDistBaroOffset * 0.95f + (state.groundDistMSL - groundDistBaroM) * 0.05f;
-	}
-	else {
-		state.groundDistMSL = groundDistBaroM + state.groundDistBaroOffset;
-	}
-	if (sonarValid) {
-		state.groundDistLocal = filterGroundDist(groundDistLocalOld, groundDistSonarM);
-		state.groundDistMSLOffset = state.groundDistMSLOffset * 0.95f + (state.groundDistLocal - state.groundDistMSL) * 0.05f;
-	}
-	else {
-		state.groundDistLocal = filterGroundDist(groundDistLocalOld, state.groundDistMSL + state.groundDistMSLOffset);
-	}
 }
 
 void MulticopterPositionControlD3::calculateAttitudeSP() {
@@ -627,7 +594,6 @@ void MulticopterPositionControlD3::doLoop() {
 	float dt = state.lastTimestamp != 0 ? (currrentTimestamp - state.lastTimestamp) * 0.000001f : 0.0f;
 	state.lastTimestamp = currrentTimestamp;
 	resetSetpointsIfNeeded();
-	calculateGroundDistance();
 	update_ref();
 	getLocalPos();
 	applyRCInputIfAvailable(dt);

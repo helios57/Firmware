@@ -42,7 +42,8 @@
 #include "../uORB.h"
 
 struct d3_target_s {
-		uint64_t timestamp;
+		uint64_t timestampInternal;
+		uint64_t timestampExternal;
 		float x; /**in rad*/
 		float y; /**in rad*/
 };

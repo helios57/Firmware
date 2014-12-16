@@ -1944,7 +1944,7 @@ protected:
 
 		if (_target_sub->update(&_target_time, &target)) {
 			mavlink_d3_target_t msg;
-			msg.timestamp = target.timestamp;
+			msg.timestamp = target.timestampExternal;
 			msg.x = target.x;
 			msg.y = target.y;
 			_mavlink->send_message(MAVLINK_MSG_ID_D3_TARGET, &msg);
