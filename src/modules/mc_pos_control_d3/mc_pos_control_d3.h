@@ -170,6 +170,7 @@ namespace pos_control_d3 {
 			void limitMaxThrust();
 			void getLocalPos();
 			void fillAndPubishLocalPositionSP();
+			void limitSetpointMoveRate();
 	};
 } /* namespace pos_control_d3 */
 

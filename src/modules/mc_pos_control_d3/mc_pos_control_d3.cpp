@@ -277,22 +277,16 @@ void MulticopterPositionControlD3::update_ref() {
 }
 
 void MulticopterPositionControlD3::reset_pos_sp() {
-	//if (_reset_pos_sp) {
-	//	_reset_pos_sp = false;
 	/* shift position setpoint to make attitude setpoint continuous */
 	vehicle_attitude_setpoint_s att_sp = uorb->vehicle_attitude_setpoint;
 	state.pos_sp(0) = state.pos(0) + (state.vel(0) - att_sp.R_body[0][2] * att_sp.thrust / uorb->params.vel_p(0) - uorb->params.vel_ff(0) * state.sp_move_rate(0)) / uorb->params.pos_p(0);
 	state.pos_sp(1) = state.pos(1) + (state.vel(1) - att_sp.R_body[1][2] * att_sp.thrust / uorb->params.vel_p(1) - uorb->params.vel_ff(1) * state.sp_move_rate(1)) / uorb->params.pos_p(1);
 	mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %d, %d", (int )state.pos_sp(0), (int )state.pos_sp(1));
-//	}
 }
 
 void MulticopterPositionControlD3::reset_alt_sp() {
-	//if (_reset_alt_sp) {
-	//	_reset_alt_sp = false;
 	state.pos_sp(2) = state.pos(2) + (state.vel(2) - uorb->params.vel_ff(2) * state.sp_move_rate(2)) / uorb->params.pos_p(2);
 	mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %d", -(int )state.pos_sp(2));
-	//}
 }
 
 void MulticopterPositionControlD3::limit_pos_sp_offset() {
@@ -316,6 +310,14 @@ void MulticopterPositionControlD3::limit_pos_sp_offset() {
 	}
 }
 
+void MulticopterPositionControlD3::limitSetpointMoveRate() {
+	/* limit setpoint move rate */
+	float sp_move_norm = state.sp_move_rate.length();
+	if (sp_move_norm > 1.0f) {
+		state.sp_move_rate /= sp_move_norm;
+	}
+}
+
 void MulticopterPositionControlD3::control_manual(float dt) {
 	state.sp_move_rate.zero();
 
@@ -329,14 +331,7 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 		state.sp_move_rate(0) = state.manualX;
 		state.sp_move_rate(1) = state.manualY;
 	}
-
-	/* limit setpoint move rate */
-	float sp_move_norm = state.sp_move_rate.length();
-
-	if (sp_move_norm > 1.0f) {
-		state.sp_move_rate /= sp_move_norm;
-	}
-
+	limitSetpointMoveRate();
 	/* state.sp_move_rate scaled to 0..1, scale it to max speed and rotate around yaw */
 	math::Matrix<3, 3> R_yaw_sp;
 	R_yaw_sp.from_euler(0.0f, 0.0f, uorb->vehicle_attitude_setpoint.yaw_body);
@@ -424,7 +419,7 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 			state.pos_sp(1) = state.pos(1) - targetPosNED[0];
 			state.sp_move_rate(0) = targetPosNED[1];
 			state.sp_move_rate(1) = -targetPosNED[0];
-
+			limitSetpointMoveRate();
 			/* feed forward setpoint move rate with weight vel_ff */
 			state.vel_feedforward = state.sp_move_rate.emult(uorb->params.vel_ff);
 		}
