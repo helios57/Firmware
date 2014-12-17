@@ -293,7 +293,7 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 	if (uorb->vehicle_control_mode.flag_control_altitude_enabled) {
 		/* move altitude setpoint with throttle stick */
 		altPosChange = -scale_control(state.manualZ - 0.5f, 0.5f, alt_ctl_dz);
-		state.pos_sp(1) += altPosChange * dt;
+		state.pos_sp(2) += altPosChange * dt;
 	}
 	if (uorb->vehicle_control_mode.flag_control_position_enabled) {
 		/* move position setpoint with roll/pitch stick */
@@ -550,21 +550,22 @@ void MulticopterPositionControlD3::doLoop() {
 		Vector<3> velD = uorb->params.vel_d;
 
 		/* run position & altitude controllers, calculate velocity setpoint */
-		state.pos_err = state.pos_sp - state.pos;
-		Vector<3> posErrEstimate = state.pos_err - state.vel * 0.5f; //in 0.5 sec
+		state.pos_err = state.pos_sp - (state.pos + state.vel.emult(velP));
+		/*Vector<3> posErrEstimate = state.pos_err - state.vel * 0.5f; //in 0.5 sec
 
-		state.vel_sp = ((state.pos_err + posErrEstimate) * 0.5f).emult(posP);
-		if (state.vel_sp.length() > 5.0f) {
-			state.vel_sp = (state.vel_sp / state.vel_sp.length()) * 5.0f;
-		}
-		state.vel_err = state.vel_sp - state.vel;
+		 state.vel_sp = ((state.pos_err + posErrEstimate) * 0.5f).emult(posP);
+		 if (state.vel_sp.length() > 5.0f) {
+		 state.vel_sp = (state.vel_sp / state.vel_sp.length()) * 5.0f;
+		 }
+		 state.vel_err = state.vel_sp - state.vel;
 
-		/* derivative of velocity error, not includes setpoint acceleration */
-		math::Vector<3> vel_err_d = (state.vel_err).emult(posP) - (state.vel - state.vel_prev) / dt;
-		state.vel_prev = state.vel;
+		 /* derivative of velocity error, not includes setpoint acceleration */
+		/*math::Vector<3> vel_err_d = (state.vel_err).emult(posP) - (state.vel - state.vel_prev) / dt;
+		 state.vel_prev = state.vel;*/
 
 		/* thrust vector in NED frame */
-		state.thrust_sp = state.vel_err.emult(velP) + vel_err_d.emult(velD) + state.thrust_int;
+		//state.thrust_sp = state.vel_err.emult(velP) + vel_err_d.emult(velD) + state.thrust_int;
+		state.thrust_sp = state.pos_err.emult(posP) + state.thrust_int;
 
 		limitMaxThrust();
 		updateIntegrals(dt);
