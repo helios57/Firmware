@@ -320,6 +320,7 @@ void MulticopterPositionControlD3::resetSetpointsIfNeeded() {
 		reset_pos_sp();
 		reset_alt_sp();
 		state.thrust_int(2) = -state.manualZ;
+		state.vel_err.zero();
 	}
 	state.armed = uorb->vehicle_control_mode.flag_armed;
 	state.enabled = checkEnablement();
@@ -550,22 +551,14 @@ void MulticopterPositionControlD3::doLoop() {
 		Vector<3> velD = uorb->params.vel_d;
 
 		/* run position & altitude controllers, calculate velocity setpoint */
-		state.pos_err = state.pos_sp - (state.pos + state.vel.emult(velP));
-		/*Vector<3> posErrEstimate = state.pos_err - state.vel * 0.5f; //in 0.5 sec
-
-		 state.vel_sp = ((state.pos_err + posErrEstimate) * 0.5f).emult(posP);
-		 if (state.vel_sp.length() > 5.0f) {
-		 state.vel_sp = (state.vel_sp / state.vel_sp.length()) * 5.0f;
-		 }
-		 state.vel_err = state.vel_sp - state.vel;
-
-		 /* derivative of velocity error, not includes setpoint acceleration */
-		/*math::Vector<3> vel_err_d = (state.vel_err).emult(posP) - (state.vel - state.vel_prev) / dt;
-		 state.vel_prev = state.vel;*/
+		state.pos_err = state.pos_sp - state.pos;
+		state.vel_sp = state.pos_err.emult(posP);
+		Vector<3> velErrNew = state.vel_sp - state.vel;
+		state.vel_err_d = (velErrNew - state.vel_err) / dt;
+		state.vel_err = velErrNew;
 
 		/* thrust vector in NED frame */
-		//state.thrust_sp = state.vel_err.emult(velP) + vel_err_d.emult(velD) + state.thrust_int;
-		state.thrust_sp = state.pos_err.emult(posP) + state.thrust_int;
+		state.thrust_sp = state.vel_err.emult(velP) + state.vel_err_d.emult(velD) + state.thrust_int;
 
 		limitMaxThrust();
 		updateIntegrals(dt);

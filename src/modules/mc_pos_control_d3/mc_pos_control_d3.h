@@ -133,11 +133,11 @@ namespace pos_control_d3 {
 					math::Vector<3> pos_sp;
 					math::Vector<3> vel;
 					math::Vector<3> vel_sp;
-					math::Vector<3> vel_prev; /**< velocity on previous step */
 					math::Vector<3> thrust_int;
 					math::Vector<3> thrust_sp;
 					math::Vector<3> pos_err;
 					math::Vector<3> vel_err;
+					math::Vector<3> vel_err_d;
 					float thrust_abs;bool saturation_xy;bool saturation_z;
 			} state;
 			int _control_task; /**< task handle for task */
