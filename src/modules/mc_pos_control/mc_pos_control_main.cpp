@@ -596,26 +596,6 @@ MulticopterPositionControl::control_manual(float dt)
 		/* move position setpoint with roll/pitch stick */
 		_sp_move_rate(0) = _manual.x;
 		_sp_move_rate(1) = _manual.y;
-
-
-		bool newTargetDetection = lastTargetTimestampExternal != _d3_target.timestamp;
-		lastTargetTimestampExternal = _d3_target.timestamp;
-		if (newTargetDetection){
-			lastTargetTimestamp = hrt_absolute_time();
-		}
-
-		bool manualXYinput = !isnan(_manual.x) && !isnan(_manual.y)  && (fabsf(_manual.x) > 0.01f || fabsf(_manual.y) > 0.01f);
-		if (!manualXYinput){
-			hrt_abstime targetAge = hrt_absolute_time() - lastTargetTimestamp;
-			//only accept target detection younger than 0.5 sec
-			if (targetAge < 500000) {
-				float q = ((500000.0f - targetAge) / 500000.0f) * 0.3f; //0-1.0
-				float targetRadX = _d3_target.x;
-				float targetRadY = _d3_target.y;
-				_sp_move_rate(0) = targetRadY * q;
-				_sp_move_rate(0) = -targetRadX * q;
-			}
-		}
 	}
 
 	/* limit setpoint move rate */
