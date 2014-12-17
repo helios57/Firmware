@@ -278,89 +278,40 @@ void MulticopterPositionControlD3::update_ref() {
 
 void MulticopterPositionControlD3::reset_pos_sp() {
 	/* shift position setpoint to make attitude setpoint continuous */
-	vehicle_attitude_setpoint_s att_sp = uorb->vehicle_attitude_setpoint;
-	state.pos_sp(0) = state.pos(0) + (state.vel(0) - att_sp.R_body[0][2] * att_sp.thrust / uorb->params.vel_p(0) - uorb->params.vel_ff(0) * state.sp_move_rate(0)) / uorb->params.pos_p(0);
-	state.pos_sp(1) = state.pos(1) + (state.vel(1) - att_sp.R_body[1][2] * att_sp.thrust / uorb->params.vel_p(1) - uorb->params.vel_ff(1) * state.sp_move_rate(1)) / uorb->params.pos_p(1);
+	state.pos_sp(0) = state.pos(0);
+	state.pos_sp(1) = state.pos(1);
 	mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %d, %d", (int )state.pos_sp(0), (int )state.pos_sp(1));
 }
 
 void MulticopterPositionControlD3::reset_alt_sp() {
-	state.pos_sp(2) = state.pos(2) + (state.vel(2) - uorb->params.vel_ff(2) * state.sp_move_rate(2)) / uorb->params.pos_p(2);
-	mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %d", -(int )state.pos_sp(2));
-}
-
-void MulticopterPositionControlD3::limit_pos_sp_offset() {
-	math::Vector<3> pos_sp_offs;
-	pos_sp_offs.zero();
-
-	if (uorb->vehicle_control_mode.flag_control_position_enabled) {
-		pos_sp_offs(0) = (state.pos_sp(0) - state.pos(0)) / uorb->params.sp_offs_max(0);
-		pos_sp_offs(1) = (state.pos_sp(1) - state.pos(1)) / uorb->params.sp_offs_max(1);
-	}
-
-	if (uorb->vehicle_control_mode.flag_control_altitude_enabled) {
-		pos_sp_offs(2) = (state.pos_sp(2) - state.pos(2)) / uorb->params.sp_offs_max(2);
-	}
-
-	float pos_sp_offs_norm = pos_sp_offs.length();
-
-	if (pos_sp_offs_norm > 1.0f) {
-		pos_sp_offs /= pos_sp_offs_norm;
-		state.pos_sp = state.pos + pos_sp_offs.emult(uorb->params.sp_offs_max);
-	}
-}
-
-void MulticopterPositionControlD3::limitSetpointMoveRate() {
-	/* limit setpoint move rate */
-	float sp_move_norm = state.sp_move_rate.length();
-	if (sp_move_norm > 1.0f) {
-		state.sp_move_rate /= sp_move_norm;
-	}
+	state.pos_sp(2) = state.pos(2);
+	mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %d", (int )state.pos_sp(2));
 }
 
 void MulticopterPositionControlD3::control_manual(float dt) {
-	state.sp_move_rate.zero();
-
+	float altPosChange = 0.0f;
 	if (uorb->vehicle_control_mode.flag_control_altitude_enabled) {
 		/* move altitude setpoint with throttle stick */
-		state.sp_move_rate(2) = -scale_control(state.manualZ - 0.5f, 0.5f, alt_ctl_dz);
+		altPosChange = -scale_control(state.manualZ - 0.5f, 0.5f, alt_ctl_dz);
+		state.pos_sp(1) += altPosChange * dt;
 	}
-
 	if (uorb->vehicle_control_mode.flag_control_position_enabled) {
 		/* move position setpoint with roll/pitch stick */
-		state.sp_move_rate(0) = state.manualX;
-		state.sp_move_rate(1) = state.manualY;
-	}
-	limitSetpointMoveRate();
-	/* state.sp_move_rate scaled to 0..1, scale it to max speed and rotate around yaw */
-	math::Matrix<3, 3> R_yaw_sp;
-	R_yaw_sp.from_euler(0.0f, 0.0f, uorb->vehicle_attitude_setpoint.yaw_body);
-	state.sp_move_rate = R_yaw_sp * state.sp_move_rate.emult(uorb->params.vel_max);
-
-	/* feed forward setpoint move rate with weight vel_ff */
-	state.vel_feedforward = state.sp_move_rate.emult(uorb->params.vel_ff);
-
-	/* move position setpoint */
-	state.pos_sp += state.sp_move_rate * dt;
-
-	/* check if position setpoint is too far from actual position */
-	math::Vector<3> pos_sp_offs;
-	pos_sp_offs.zero();
-
-	if (uorb->vehicle_control_mode.flag_control_position_enabled) {
-		pos_sp_offs(0) = (state.pos_sp(0) - state.pos(0)) / uorb->params.sp_offs_max(0);
-		pos_sp_offs(1) = (state.pos_sp(1) - state.pos(1)) / uorb->params.sp_offs_max(1);
-	}
-
-	if (uorb->vehicle_control_mode.flag_control_altitude_enabled) {
-		pos_sp_offs(2) = (state.pos_sp(2) - state.pos(2)) / uorb->params.sp_offs_max(2);
-	}
-
-	float pos_sp_offs_norm = pos_sp_offs.length();
-
-	if (pos_sp_offs_norm > 1.0f) {
-		pos_sp_offs /= pos_sp_offs_norm;
-		state.pos_sp = state.pos + pos_sp_offs.emult(uorb->params.sp_offs_max);
+		vehicle_attitude_s vehicleAttitude = uorb->vehicle_attitude;
+		float manualX = state.manualX;
+		float manualY = state.manualY;
+		float frame_m[3];
+		frame_m[0] = manualY;
+		frame_m[1] = -manualX;
+		frame_m[2] = 0.0f;
+		float manualChangeNED[2] = { 0.0f, 0.0f };
+		for (int i = 0; i < 2; i++) {
+			for (int j = 0; j < 3; j++) {
+				manualChangeNED[i] += vehicleAttitude.R[i][j] * frame_m[j];
+			}
+		}
+		state.pos_sp(0) += manualChangeNED[0] * dt;
+		state.pos_sp(1) += manualChangeNED[1] * dt;
 	}
 }
 
@@ -417,11 +368,6 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 			}
 			state.pos_sp(0) = state.pos(0) + targetPosNED[1];
 			state.pos_sp(1) = state.pos(1) - targetPosNED[0];
-			state.sp_move_rate(0) = targetPosNED[1];
-			state.sp_move_rate(1) = -targetPosNED[0];
-			limitSetpointMoveRate();
-			/* feed forward setpoint move rate with weight vel_ff */
-			state.vel_feedforward = state.sp_move_rate.emult(uorb->params.vel_ff);
 		}
 	}
 }
@@ -573,8 +519,6 @@ void MulticopterPositionControlD3::getLocalPos() {
 	state.vel(0) = localPos.vx;
 	state.vel(1) = localPos.vy;
 	state.vel(2) = localPos.vz;
-	state.vel_feedforward.zero();
-	state.sp_move_rate.zero();
 }
 
 void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
@@ -607,13 +551,18 @@ void MulticopterPositionControlD3::doLoop() {
 
 		/* run position & altitude controllers, calculate velocity setpoint */
 		state.pos_err = state.pos_sp - state.pos;
+		Vector<3> posErrEstimate = state.pos_err - state.vel * 0.5f; //in 0.5 sec
 
-		state.vel_sp = state.pos_err.emult(posP) + state.vel_feedforward;
+		state.vel_sp = ((state.pos_err + posErrEstimate) * 0.5f).emult(posP);
+		if (state.vel_sp.length() > 5.0f) {
+			state.vel_sp = (state.vel_sp / state.vel_sp.length()) * 5.0f;
+		}
 		state.vel_err = state.vel_sp - state.vel;
 
 		/* derivative of velocity error, not includes setpoint acceleration */
-		math::Vector<3> vel_err_d = (state.sp_move_rate - state.vel).emult(posP) - (state.vel - state.vel_prev) / dt;
+		math::Vector<3> vel_err_d = (state.vel_err).emult(posP) - (state.vel - state.vel_prev) / dt;
 		state.vel_prev = state.vel;
+
 		/* thrust vector in NED frame */
 		state.thrust_sp = state.vel_err.emult(velP) + vel_err_d.emult(velD) + state.thrust_int;
 

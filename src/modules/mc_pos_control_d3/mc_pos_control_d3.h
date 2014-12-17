@@ -134,8 +134,6 @@ namespace pos_control_d3 {
 					math::Vector<3> vel;
 					math::Vector<3> vel_sp;
 					math::Vector<3> vel_prev; /**< velocity on previous step */
-					math::Vector<3> vel_feedforward;
-					math::Vector<3> sp_move_rate;
 					math::Vector<3> thrust_int;
 					math::Vector<3> thrust_sp;
 					math::Vector<3> pos_err;
@@ -170,7 +168,6 @@ namespace pos_control_d3 {
 			void limitMaxThrust();
 			void getLocalPos();
 			void fillAndPubishLocalPositionSP();
-			void limitSetpointMoveRate();
 	};
 } /* namespace pos_control_d3 */
 
