@@ -92,6 +92,7 @@ namespace pos_control_d3 {
 					math::Vector<3> vel_max;
 					math::Vector<3> sp_offs_max;
 			} params;
+			bool newTarget;
 			UOrbBridge();
 			~UOrbBridge();
 			struct vehicle_attitude_s vehicle_attitude;

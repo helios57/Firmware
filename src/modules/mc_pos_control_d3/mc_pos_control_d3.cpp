@@ -72,7 +72,8 @@ void UOrbBridge::updateParams(bool force) {
 UOrbBridge::UOrbBridge() :
 		vehicle_attitude_setpoint_publication(-1),
 		vehicle_local_position_setpoint_publication(-1),
-		updated(false) {
+		updated(false),
+		newTarget(false) {
 	vehicle_attitude_subscription = orb_subscribe(ORB_ID(vehicle_attitude));
 	vehicle_attitude_setpoint_subscription = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
 	vehicle_control_mode_subscription = orb_subscribe(ORB_ID(vehicle_control_mode));
@@ -167,6 +168,7 @@ void UOrbBridge::update() {
 	}
 	if (needsUpdate(d3_target_subscription)) {
 		orb_copy(ORB_ID(d3_target), d3_target_subscription, &d3_target);
+		newTarget = true;
 	}
 	if (needsUpdate(sensor_combined_subscription)) {
 		orb_copy(ORB_ID(sensor_combined), sensor_combined_subscription, &sensor_combined);
@@ -301,8 +303,8 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 		float manualX = state.manualX;
 		float manualY = state.manualY;
 		float frame_m[3];
-		frame_m[0] = manualY;
-		frame_m[1] = -manualX;
+		frame_m[0] = manualX;
+		frame_m[1] = manualY;
 		frame_m[2] = 0.0f;
 		float manualChangeNED[2] = { 0.0f, 0.0f };
 		for (int i = 0; i < 2; i++) {
@@ -310,8 +312,8 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 				manualChangeNED[i] += vehicleAttitude.R[i][j] * frame_m[j];
 			}
 		}
-		state.pos_sp(0) += manualChangeNED[0] * dt;
-		state.pos_sp(1) += manualChangeNED[1] * dt;
+		state.pos_sp(0) += manualChangeNED[0] * dt * 10.0f;
+		state.pos_sp(1) += manualChangeNED[1] * dt * 10.0f;
 	}
 }
 
@@ -338,38 +340,35 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 	state.manualY = uorb->manual_control_setpoint.y;
 	state.manualZ = uorb->manual_control_setpoint.z;
 	state.manualR = uorb->manual_control_setpoint.r;
-	state.manualXYinput = fabsf(state.manualX) > 0.05f || fabsf(state.manualY) > 0.05f;
+	state.manualXYinput = fabsf(state.manualX) > 0.1f || fabsf(state.manualY) > 0.1f;
 	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
 		control_manual(dt);
 	}
 }
 
 void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestamp) {
-	if (!state.manualXYinput) {
+	if (!state.manualXYinput && uorb->newTarget) {
+		uorb->newTarget = false;
 		d3_target_s d3Target = uorb->d3_target;
 		vehicle_attitude_s vehicleAttitude = uorb->vehicle_attitude;
-		hrt_abstime targetAge = currrentTimestamp - d3Target.timestampInternal;
 		vehicle_local_position_s vehicleLocalPosition = uorb->vehicle_local_position;
 		float distBottom = vehicleLocalPosition.dist_bottom;
 
-		//accept 1s old target
-		if (targetAge < 1000000 && distBottom < 4.0f) {
-			float targetRadX = d3Target.x;
-			float targetRadY = d3Target.y;
-			float frame_m[3];
-			frame_m[0] = targetRadX * distBottom;
-			frame_m[1] = targetRadY * distBottom;
-			frame_m[2] = distBottom;
+		float targetRadX = -d3Target.x;
+		float targetRadY = -d3Target.y;
+		float frame_m[3];
+		frame_m[0] = targetRadX * distBottom;
+		frame_m[1] = targetRadY * distBottom;
+		frame_m[2] = 0.0f;
 
-			float targetPosNED[2] = { 0.0f, 0.0f };
-			for (int i = 0; i < 2; i++) {
-				for (int j = 0; j < 3; j++) {
-					targetPosNED[i] += vehicleAttitude.R[i][j] * frame_m[j];
-				}
+		float targetPosNED[2] = { 0.0f, 0.0f };
+		for (int i = 0; i < 2; i++) {
+			for (int j = 0; j < 3; j++) {
+				targetPosNED[i] += vehicleAttitude.R[i][j] * frame_m[j];
 			}
-			state.pos_sp(0) = state.pos(0) + targetPosNED[1];
-			state.pos_sp(1) = state.pos(1) - targetPosNED[0];
 		}
+		state.pos_sp(0) = state.pos(0) + targetPosNED[0];
+		state.pos_sp(1) = state.pos(1) + targetPosNED[1];
 	}
 }
 
@@ -549,17 +548,40 @@ void MulticopterPositionControlD3::doLoop() {
 		Vector<3> posP = uorb->params.pos_p;
 		Vector<3> velP = uorb->params.vel_p;
 		Vector<3> velD = uorb->params.vel_d;
+		Vector<3> oldThrust;
+		oldThrust(0) = state.thrust_sp(0);
+		oldThrust(1) = state.thrust_sp(1);
+		//float a = 2.0f;
+		//float v = 5.0f;
 
 		/* run position & altitude controllers, calculate velocity setpoint */
+		Vector<3> oldPosErr = state.pos_err;
 		state.pos_err = state.pos_sp - state.pos;
+		//state.pos_sp = state.pos + state.vel + oldThrust/2
+		/*Vector<3> minimalerBremsweg = (state.vel * state.vel) / (2 * a);
+		 //In nähe, abbremsen
+		 if (minimalerBremsweg >= state.pos_err) {
+		 //bremsen
+		 }
+		 else if (state.pos_err > minimalerBremsweg && state.vel.length() < v) {
+		 //beschleunigen
+		 }
+		 else {
+		 //reisegeschwindigkeit
+		 }*/
+		Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
+
 		state.vel_sp = state.pos_err.emult(posP);
 		Vector<3> velErrNew = state.vel_sp - state.vel;
+
 		state.vel_err_d = (velErrNew - state.vel_err) / dt;
 		state.vel_err = velErrNew;
 
 		/* thrust vector in NED frame */
-		state.thrust_sp = state.vel_err.emult(velP) + state.vel_err_d.emult(velD) + state.thrust_int;
-
+		state.thrust_sp = state.vel_err.emult(velP) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
+		for (int i = 0; i < 3; i++) {
+			state.thrust_sp(i) = sqrt(2 * state.thrust_sp(i));
+		}
 		limitMaxThrust();
 		updateIntegrals(dt);
 		calculateAttitudeSP();
