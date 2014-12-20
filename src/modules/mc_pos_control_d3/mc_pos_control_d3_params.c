@@ -77,7 +77,7 @@ PARAM_DEFINE_FLOAT(MPC_Z_P, 1.0f);
  * @min 0.0
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_Z_VEL_P, 0.1f);
+PARAM_DEFINE_FLOAT(MPC_Z_VEL_P, 0.5f);
 
 /**
  * Integral gain for vertical velocity error
@@ -117,7 +117,7 @@ PARAM_DEFINE_FLOAT(MPC_Z_VEL_MAX, 5.0f);
  * @max 1.0
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_Z_FF, 0.4f);
+PARAM_DEFINE_FLOAT(MPC_Z_FF, 0.0f);
 
 /**
  * Proportional gain for horizontal position error
@@ -133,7 +133,7 @@ PARAM_DEFINE_FLOAT(MPC_XY_P, 1.0f);
  * @min 0.0
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_XY_VEL_P, 0.06f);
+PARAM_DEFINE_FLOAT(MPC_XY_VEL_P, 0.04f);
 
 /**
  * Integral gain for horizontal velocity error
@@ -143,7 +143,7 @@ PARAM_DEFINE_FLOAT(MPC_XY_VEL_P, 0.06f);
  * @min 0.0
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_XY_VEL_I, 0.01f);
+PARAM_DEFINE_FLOAT(MPC_XY_VEL_I, 0.0f);
 
 /**
  * Differential gain for horizontal velocity error. Small values help reduce fast oscillations. If value is too big oscillations will appear again.
@@ -151,7 +151,7 @@ PARAM_DEFINE_FLOAT(MPC_XY_VEL_I, 0.01f);
  * @min 0.0
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_XY_VEL_D, 0.002f);
+PARAM_DEFINE_FLOAT(MPC_XY_VEL_D, 0.007f);
 
 /**
  * Maximum horizontal velocity
@@ -173,7 +173,7 @@ PARAM_DEFINE_FLOAT(MPC_XY_VEL_MAX, 5.0f);
  * @max 1.0
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_XY_FF, 0.5f);
+PARAM_DEFINE_FLOAT(MPC_XY_FF, 0.0f);
 
 /**
  * Maximum tilt angle in air

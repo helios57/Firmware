@@ -438,11 +438,11 @@ void MulticopterPositionControlD3::publishAttitudeSP() {
 void MulticopterPositionControlD3::updateIntegrals(float dt) {
 	/* update integrals */
 	if (!state.saturation_xy) {
-		state.thrust_int(0) += state.vel_err(0) * uorb->params.vel_i(0) * dt;
-		state.thrust_int(1) += state.vel_err(1) * uorb->params.vel_i(1) * dt;
+		state.thrust_int(0) += state.pos_err(0) * uorb->params.vel_i(0) * dt;
+		state.thrust_int(1) += state.pos_err(1) * uorb->params.vel_i(1) * dt;
 	}
 	if (!state.saturation_z) {
-		state.thrust_int(2) += state.vel_err(2) * uorb->params.vel_i(2) * dt;
+		state.thrust_int(2) += state.pos_err(2) * uorb->params.vel_i(2) * dt;
 		/* protection against flipping on ground when landing */
 		if (state.thrust_int(2) > 0.0f) {
 			state.thrust_int(2) = 0.0f;
@@ -451,6 +451,9 @@ void MulticopterPositionControlD3::updateIntegrals(float dt) {
 }
 
 void MulticopterPositionControlD3::limitMaxThrust() {
+	state.saturation_xy = false;
+	state.saturation_z = false;
+
 	/* limit thrust vector and check for saturation */
 	/* limit min lift */
 	float thr_min = uorb->params.thr_min;
@@ -531,6 +534,21 @@ void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
 	uorb->publishLocalPositionSetpoint();
 }
 
+void MulticopterPositionControlD3::calculateThrustSetpointWithPID(float dt) {
+	Vector<3> posP = uorb->params.pos_p;
+	Vector<3> velP = uorb->params.vel_p;
+	Vector<3> velD = uorb->params.vel_d;
+	Vector<3> oldPosErr = state.pos_err;
+	state.pos_err = state.pos_sp - state.pos;
+	Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
+	state.vel_sp = state.pos_err.emult(posP);
+	Vector<3> velErrNew = state.vel_sp - state.vel;
+	state.vel_err_d = (velErrNew - state.vel_err) / dt;
+	state.vel_err = velErrNew;
+
+	state.thrust_sp = state.vel_err.emult(velP) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
+}
+
 void MulticopterPositionControlD3::doLoop() {
 	uorb->update();
 	uorb->updateParams(false);
@@ -545,43 +563,7 @@ void MulticopterPositionControlD3::doLoop() {
 	fillAndPubishLocalPositionSP();
 
 	if (state.enabled) {
-		Vector<3> posP = uorb->params.pos_p;
-		Vector<3> velP = uorb->params.vel_p;
-		Vector<3> velD = uorb->params.vel_d;
-		Vector<3> oldThrust;
-		oldThrust(0) = state.thrust_sp(0);
-		oldThrust(1) = state.thrust_sp(1);
-		//float a = 2.0f;
-		//float v = 5.0f;
-
-		/* run position & altitude controllers, calculate velocity setpoint */
-		Vector<3> oldPosErr = state.pos_err;
-		state.pos_err = state.pos_sp - state.pos;
-		//state.pos_sp = state.pos + state.vel + oldThrust/2
-		/*Vector<3> minimalerBremsweg = (state.vel * state.vel) / (2 * a);
-		 //In nähe, abbremsen
-		 if (minimalerBremsweg >= state.pos_err) {
-		 //bremsen
-		 }
-		 else if (state.pos_err > minimalerBremsweg && state.vel.length() < v) {
-		 //beschleunigen
-		 }
-		 else {
-		 //reisegeschwindigkeit
-		 }*/
-		Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
-
-		state.vel_sp = state.pos_err.emult(posP);
-		Vector<3> velErrNew = state.vel_sp - state.vel;
-
-		state.vel_err_d = (velErrNew - state.vel_err) / dt;
-		state.vel_err = velErrNew;
-
-		/* thrust vector in NED frame */
-		state.thrust_sp = state.vel_err.emult(velP) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
-		for (int i = 0; i < 3; i++) {
-			state.thrust_sp(i) = sqrt(2 * state.thrust_sp(i));
-		}
+		calculateThrustSetpointWithPID(dt);
 		limitMaxThrust();
 		updateIntegrals(dt);
 		calculateAttitudeSP();

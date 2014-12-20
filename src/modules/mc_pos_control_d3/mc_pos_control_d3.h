@@ -34,9 +34,7 @@ using namespace math;
 
 namespace pos_control_d3 {
 
-#define TILT_COS_MAX	0.7f
 #define SIGMA			0.000001f
-#define MIN_DIST		0.01f
 
 	class UOrbBridge {
 		private:
@@ -91,7 +89,7 @@ namespace pos_control_d3 {
 					math::Vector<3> vel_ff;
 					math::Vector<3> vel_max;
 					math::Vector<3> sp_offs_max;
-			} params;
+			} params; //
 			bool newTarget;
 			UOrbBridge();
 			~UOrbBridge();
@@ -134,12 +132,14 @@ namespace pos_control_d3 {
 					math::Vector<3> pos_sp;
 					math::Vector<3> vel;
 					math::Vector<3> vel_sp;
-					math::Vector<3> thrust_int;
-					math::Vector<3> thrust_sp;
+					math::Vector<3> thrust_int;/* thrust vector integration + hoover */
+					math::Vector<3> thrust_sp;/* thrust vector in NED frame */
 					math::Vector<3> pos_err;
 					math::Vector<3> vel_err;
 					math::Vector<3> vel_err_d;
-					float thrust_abs;bool saturation_xy;bool saturation_z;
+					float thrust_abs; //
+					bool saturation_xy; //
+					bool saturation_z; //
 			} state;
 			int _control_task; /**< task handle for task */
 			bool _task_should_exit; /**< if true, task should exit */
@@ -169,6 +169,7 @@ namespace pos_control_d3 {
 			void limitMaxThrust();
 			void getLocalPos();
 			void fillAndPubishLocalPositionSP();
+			void calculateThrustSetpointWithPID(float dt);
 	};
 } /* namespace pos_control_d3 */
 
