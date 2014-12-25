@@ -282,6 +282,7 @@ void MulticopterPositionControlD3::reset_pos_sp() {
 	/* shift position setpoint to make attitude setpoint continuous */
 	state.pos_sp(0) = state.pos(0);
 	state.pos_sp(1) = state.pos(1);
+	state.pos_err.zero();
 	mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %d, %d", (int )state.pos_sp(0), (int )state.pos_sp(1));
 }
 
@@ -295,6 +296,9 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 	if (uorb->vehicle_control_mode.flag_control_altitude_enabled) {
 		/* move altitude setpoint with throttle stick */
 		altPosChange = -scale_control(state.manualZ - 0.5f, 0.5f, alt_ctl_dz);
+		if (fabsf(altPosChange) >= 0.1f) {
+			state.integral_z_frozen = true;
+		}
 		state.pos_sp(2) += altPosChange * dt;
 	}
 	if (uorb->vehicle_control_mode.flag_control_position_enabled) {
@@ -317,12 +321,14 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 	}
 }
 
-void MulticopterPositionControlD3::resetSetpointsIfNeeded() {
+void MulticopterPositionControlD3::resetSetpointsIfNeeded(float dt) {
 	if ((uorb->vehicle_control_mode.flag_armed && !state.armed) || (checkEnablement() && !state.enabled)) {
 		reset_pos_sp();
 		reset_alt_sp();
+		state.thrust_int.zero();
 		state.thrust_int(2) = -state.manualZ;
 		state.vel_err.zero();
+		calculateThrustSetpointWithPID(dt);
 	}
 	state.armed = uorb->vehicle_control_mode.flag_armed;
 	state.enabled = checkEnablement();
@@ -341,6 +347,9 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 	state.manualZ = uorb->manual_control_setpoint.z;
 	state.manualR = uorb->manual_control_setpoint.r;
 	state.manualXYinput = fabsf(state.manualX) > 0.1f || fabsf(state.manualY) > 0.1f;
+	if (state.manualXYinput) {
+		state.integral_xy_frozen = true;
+	}
 	if (uorb->vehicle_control_mode.flag_control_manual_enabled) {
 		control_manual(dt);
 	}
@@ -349,6 +358,7 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestamp) {
 	if (!state.manualXYinput && uorb->newTarget) {
 		uorb->newTarget = false;
+		state.integral_xy_frozen = true;
 		d3_target_s d3Target = uorb->d3_target;
 		vehicle_attitude_s vehicleAttitude = uorb->vehicle_attitude;
 		vehicle_local_position_s vehicleLocalPosition = uorb->vehicle_local_position;
@@ -430,11 +440,11 @@ void MulticopterPositionControlD3::publishAttitudeSP() {
 
 void MulticopterPositionControlD3::updateIntegrals(float dt) {
 	/* update integrals */
-	if (!state.saturation_xy) {
+	if (!state.integral_xy_frozen) {
 		state.thrust_int(0) += state.pos_err(0) * uorb->params.vel_i(0) * dt;
 		state.thrust_int(1) += state.pos_err(1) * uorb->params.vel_i(1) * dt;
 	}
-	if (!state.saturation_z) {
+	if (!state.integral_z_frozen) {
 		state.thrust_int(2) += state.pos_err(2) * uorb->params.vel_i(2) * dt;
 		/* protection against flipping on ground when landing */
 		if (state.thrust_int(2) > 0.0f) {
@@ -444,9 +454,6 @@ void MulticopterPositionControlD3::updateIntegrals(float dt) {
 }
 
 void MulticopterPositionControlD3::limitMaxThrust() {
-	state.saturation_xy = false;
-	state.saturation_z = false;
-
 	/* limit thrust vector and check for saturation */
 	/* limit min lift */
 	float thr_min = uorb->params.thr_min;
@@ -454,7 +461,7 @@ void MulticopterPositionControlD3::limitMaxThrust() {
 	/* limit min lift */
 	if (-state.thrust_sp(2) < thr_min) {
 		state.thrust_sp(2) = -thr_min;
-		state.saturation_z = true;
+		state.integral_z_frozen = true;
 	}
 
 	/* limit max tilt */
@@ -468,7 +475,7 @@ void MulticopterPositionControlD3::limitMaxThrust() {
 			float k = thrust_xy_max / thrust_sp_xy_len;
 			state.thrust_sp(0) *= k;
 			state.thrust_sp(1) *= k;
-			state.saturation_xy = true;
+			state.integral_xy_frozen = true;
 		}
 	}
 	/* limit max thrust */
@@ -480,8 +487,8 @@ void MulticopterPositionControlD3::limitMaxThrust() {
 				state.thrust_sp(0) = 0.0f;
 				state.thrust_sp(1) = 0.0f;
 				state.thrust_sp(2) = -uorb->params.thr_max;
-				state.saturation_xy = true;
-				state.saturation_z = true;
+				state.integral_xy_frozen = true;
+				state.integral_z_frozen = true;
 
 			}
 			else {
@@ -491,7 +498,7 @@ void MulticopterPositionControlD3::limitMaxThrust() {
 				float k = thrust_xy_max / thrust_xy_abs;
 				state.thrust_sp(0) *= k;
 				state.thrust_sp(1) *= k;
-				state.saturation_xy = true;
+				state.integral_xy_frozen = true;
 			}
 
 		}
@@ -499,8 +506,8 @@ void MulticopterPositionControlD3::limitMaxThrust() {
 			/* Z component is negative, going down, simply limit thrust vector */
 			float k = uorb->params.thr_max / state.thrust_abs;
 			state.thrust_sp *= k;
-			state.saturation_xy = true;
-			state.saturation_z = true;
+			state.integral_xy_frozen = true;
+			state.integral_z_frozen = true;
 		}
 
 		state.thrust_abs = uorb->params.thr_max;
@@ -546,7 +553,11 @@ void MulticopterPositionControlD3::doLoop() {
 	hrt_abstime currrentTimestamp = hrt_absolute_time();
 	float dt = state.lastTimestamp != 0 ? (currrentTimestamp - state.lastTimestamp) * 0.000001f : 0.0f;
 	state.lastTimestamp = currrentTimestamp;
-	resetSetpointsIfNeeded();
+
+	state.integral_xy_frozen = false;
+	state.integral_z_frozen = false;
+
+	resetSetpointsIfNeeded(dt);
 	update_ref();
 	getLocalPos();
 	applyRCInputIfAvailable(dt);

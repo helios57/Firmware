@@ -138,8 +138,8 @@ namespace pos_control_d3 {
 					math::Vector<3> vel_err;
 					math::Vector<3> vel_err_d;
 					float thrust_abs; //
-					bool saturation_xy; //
-					bool saturation_z; //
+					bool integral_xy_frozen; //
+					bool integral_z_frozen; //
 			} state;
 			int _control_task; /**< task handle for task */
 			bool _task_should_exit; /**< if true, task should exit */
@@ -152,7 +152,8 @@ namespace pos_control_d3 {
 			UOrbBridge *uorb;
 			void initialize(); //
 			void doLoop();
-			void resetSetpointsIfNeeded();bool checkEnablement();
+			void resetSetpointsIfNeeded(float dt); //
+			bool checkEnablement();
 			void applyRCInputIfAvailable(float dt);
 			void applyTargetInput(hrt_abstime currrentTimestamp);
 			float scale_control(float ctl, float end, float dz);
