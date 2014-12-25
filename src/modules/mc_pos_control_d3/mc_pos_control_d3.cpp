@@ -354,8 +354,8 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 		vehicle_local_position_s vehicleLocalPosition = uorb->vehicle_local_position;
 		float distBottom = vehicleLocalPosition.dist_bottom;
 
-		float targetRadX = -d3Target.x;
-		float targetRadY = -d3Target.y;
+		float targetRadX = -d3Target.y;
+		float targetRadY = -d3Target.x;
 		float frame_m[3];
 		frame_m[0] = targetRadX * distBottom;
 		frame_m[1] = targetRadY * distBottom;
@@ -370,13 +370,6 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 		state.pos_sp(0) = state.pos(0) + targetPosNED[0];
 		state.pos_sp(1) = state.pos(1) + targetPosNED[1];
 	}
-}
-
-float MulticopterPositionControlD3::filterGroundDist(float groundDistLocalOld, float groundDistSonarM) {
-	float diff = max(fabsf(groundDistLocalOld - groundDistSonarM), 0.1f); //0.1 - 3.8
-	float p = 5.0f / (diff * 100.0f);
-	float newGroundDist = groundDistLocalOld * p + groundDistSonarM * (1 - p);
-	return newGroundDist;
 }
 
 void MulticopterPositionControlD3::calculateAttitudeSP() {
@@ -525,7 +518,6 @@ void MulticopterPositionControlD3::getLocalPos() {
 }
 
 void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
-	/* fill local position setpoint */
 	uorb->vehicle_local_position_setpoint.timestamp = hrt_absolute_time();
 	uorb->vehicle_local_position_setpoint.x = state.pos_sp(0);
 	uorb->vehicle_local_position_setpoint.y = state.pos_sp(1);
@@ -545,7 +537,6 @@ void MulticopterPositionControlD3::calculateThrustSetpointWithPID(float dt) {
 	Vector<3> velErrNew = state.vel_sp - state.vel;
 	state.vel_err_d = (velErrNew - state.vel_err) / dt;
 	state.vel_err = velErrNew;
-
 	state.thrust_sp = state.vel_err.emult(velP) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
 }
 

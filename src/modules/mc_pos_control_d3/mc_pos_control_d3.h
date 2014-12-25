@@ -155,8 +155,6 @@ namespace pos_control_d3 {
 			void resetSetpointsIfNeeded();bool checkEnablement();
 			void applyRCInputIfAvailable(float dt);
 			void applyTargetInput(hrt_abstime currrentTimestamp);
-			float filterGroundDist(float groundDistLocalOld, float groundDistSonarM);
-			void calculateGroundDistance();
 			float scale_control(float ctl, float end, float dz);
 			void update_ref();
 			void reset_pos_sp();
