@@ -364,7 +364,7 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 		vehicle_local_position_s vehicleLocalPosition = uorb->vehicle_local_position;
 		float distBottom = vehicleLocalPosition.dist_bottom;
 
-		float targetRadX = -d3Target.y;
+		float targetRadX = d3Target.y;
 		float targetRadY = -d3Target.x;
 		float frame_m[3];
 		frame_m[0] = targetRadX * distBottom;
