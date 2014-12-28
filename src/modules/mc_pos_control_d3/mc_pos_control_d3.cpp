@@ -366,19 +366,17 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 
 		float targetRadX = d3Target.y;
 		float targetRadY = -d3Target.x;
-		float frame_m[3];
-		frame_m[0] = targetRadX * distBottom;
-		frame_m[1] = targetRadY * distBottom;
-		frame_m[2] = 0.0f;
+		Vector<3> frame_m;
+		frame_m(0) = targetRadX * distBottom;
+		frame_m(1) = targetRadY * distBottom;
+		frame_m(2) = 0.0f;
 
-		float targetPosNED[2] = { 0.0f, 0.0f };
-		for (int i = 0; i < 2; i++) {
-			for (int j = 0; j < 3; j++) {
-				targetPosNED[i] += vehicleAttitude.R[i][j] * frame_m[j];
-			}
-		}
-		state.pos_sp(0) = state.pos(0) + targetPosNED[0];
-		state.pos_sp(1) = state.pos(1) + targetPosNED[1];
+		Matrix<3, 3> R_yaw_sp;
+		R_yaw_sp.from_euler(0.0f, 0.0f, vehicleAttitude.yaw);
+		Vector<3> targetPosNED = R_yaw_sp * frame_m;
+
+		state.pos_sp(0) = state.pos(0) + targetPosNED(0);
+		state.pos_sp(1) = state.pos(1) + targetPosNED(1);
 	}
 }
 
