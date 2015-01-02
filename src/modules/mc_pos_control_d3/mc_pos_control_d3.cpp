@@ -38,11 +38,13 @@ void UOrbBridge::updateParams(bool force) {
 		params.pos_p(1) = f;
 		param_get(param_handles.z_p, &f);
 		params.pos_p(2) = f;
+		params.target_pos_p(2) = f;
 		param_get(param_handles.xy_vel_p, &f);
 		params.vel_p(0) = f;
 		params.vel_p(1) = f;
 		param_get(param_handles.z_vel_p, &f);
 		params.vel_p(2) = f;
+		params.target_vel_p(2) = f;
 		param_get(param_handles.xy_vel_i, &f);
 		params.vel_i(0) = f;
 		params.vel_i(1) = f;
@@ -53,6 +55,8 @@ void UOrbBridge::updateParams(bool force) {
 		params.vel_d(1) = f;
 		param_get(param_handles.z_vel_d, &f);
 		params.vel_d(2) = f;
+		params.target_pos_d(2) = f;
+		params.target_vel_d(2) = f;
 		param_get(param_handles.xy_vel_max, &f);
 		params.vel_max(0) = f;
 		params.vel_max(1) = f;
@@ -66,6 +70,18 @@ void UOrbBridge::updateParams(bool force) {
 		f = math::constrain(f, 0.0f, 1.0f);
 		params.vel_ff(2) = f;
 		params.sp_offs_max = params.vel_max.edivide(params.pos_p) * 2.0f;
+		param_get(param_handles.target_pos_p, &f);
+		params.target_pos_p(0) = f;
+		params.target_pos_p(1) = f;
+		param_get(param_handles.target_pos_d, &f);
+		params.target_pos_d(0) = f;
+		params.target_pos_d(1) = f;
+		param_get(param_handles.target_vel_p, &f);
+		params.target_vel_p(0) = f;
+		params.target_vel_p(1) = f;
+		param_get(param_handles.target_vel_d, &f);
+		params.target_vel_d(0) = f;
+		params.target_vel_d(1) = f;
 	}
 }
 
@@ -125,6 +141,10 @@ UOrbBridge::UOrbBridge() :
 	param_handles.tilt_max_air = param_find("MPC_TILTMAX_AIR");
 	param_handles.land_speed = param_find("MPC_LAND_SPEED");
 	param_handles.tilt_max_land = param_find("MPC_TILTMAX_LND");
+	param_handles.target_pos_p = param_find("MPC_TARGET_POS_P");
+	param_handles.target_pos_d = param_find("MPC_TARGET_POS_D");
+	param_handles.target_vel_p = param_find("MPC_TARGET_VEL_P");
+	param_handles.target_vel_d = param_find("MPC_TARGET_VEL_D");
 	updateParams(true);
 }
 
@@ -321,14 +341,14 @@ void MulticopterPositionControlD3::control_manual(float dt) {
 	}
 }
 
-void MulticopterPositionControlD3::resetSetpointsIfNeeded(float dt) {
+void MulticopterPositionControlD3::resetSetpointsIfNeeded(float dt, hrt_abstime currrentTimestamp) {
 	if ((uorb->vehicle_control_mode.flag_armed && !state.armed) || (checkEnablement() && !state.enabled)) {
 		reset_pos_sp();
 		reset_alt_sp();
 		state.thrust_int.zero();
 		state.thrust_int(2) = -state.manualZ;
 		state.vel_err.zero();
-		calculateThrustSetpointWithPID(dt);
+		calculateThrustSetpointWithPID(dt, currrentTimestamp);
 	}
 	state.armed = uorb->vehicle_control_mode.flag_armed;
 	state.enabled = checkEnablement();
@@ -358,7 +378,7 @@ void MulticopterPositionControlD3::applyRCInputIfAvailable(float dt) {
 void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestamp) {
 	if (!state.manualXYinput && uorb->newTarget) {
 		uorb->newTarget = false;
-		state.integral_xy_frozen = true;
+		state.targetTimestamp = currrentTimestamp;
 		d3_target_s d3Target = uorb->d3_target;
 		vehicle_attitude_s vehicleAttitude = uorb->vehicle_attitude;
 		vehicle_local_position_s vehicleLocalPosition = uorb->vehicle_local_position;
@@ -373,10 +393,10 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 
 		Matrix<3, 3> R_yaw_sp;
 		R_yaw_sp.from_euler(0.0f, 0.0f, vehicleAttitude.yaw);
-		Vector<3> targetPosNED = R_yaw_sp * frame_m;
+		state.targetPosNED = R_yaw_sp * frame_m;
 
-		state.pos_sp(0) = state.pos(0) + targetPosNED(0);
-		state.pos_sp(1) = state.pos(1) + targetPosNED(1);
+		state.pos_sp(0) = state.pos(0) + state.targetPosNED(0);
+		state.pos_sp(1) = state.pos(1) + state.targetPosNED(1);
 	}
 }
 
@@ -531,18 +551,31 @@ void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
 	uorb->publishLocalPositionSetpoint();
 }
 
-void MulticopterPositionControlD3::calculateThrustSetpointWithPID(float dt) {
-	Vector<3> posP = uorb->params.pos_p;
-	Vector<3> velP = uorb->params.vel_p;
-	Vector<3> velD = uorb->params.vel_d;
+void MulticopterPositionControlD3::calculateThrustSetpointWithPID(float dt, hrt_abstime currrentTimestamp) {
 	Vector<3> oldPosErr = state.pos_err;
-	state.pos_err = state.pos_sp - state.pos;
-	Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
-	state.vel_sp = state.pos_err.emult(posP);
-	Vector<3> velErrNew = state.vel_sp - state.vel;
-	state.vel_err_d = (velErrNew - state.vel_err) / dt;
-	state.vel_err = velErrNew;
-	state.thrust_sp = state.vel_err.emult(velP) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
+	if ((currrentTimestamp - state.targetTimestamp) < 400000) { //use target directly if fresh
+		state.pos_err = state.targetPosNED;
+		state.pos_err(2) = state.pos_sp(2) - state.pos(2);
+		Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
+		state.vel_sp = state.pos_err.emult(uorb->params.target_pos_p);
+		Vector<3> velErrNew = state.vel_sp - state.vel;
+		state.vel_err_d = (velErrNew - state.vel_err) / dt;
+		state.vel_err = velErrNew;
+		Vector<3> vel_p = state.vel_err.emult(uorb->params.target_vel_p);
+		Vector<3> vel_d = state.vel_err_d.emult(uorb->params.target_vel_d);
+		Vector<3> pos_d = posErrorDelta.emult(uorb->params.target_pos_d);
+		state.thrust_sp = vel_p + vel_d + pos_d + state.thrust_int;
+	}
+	else {
+		Vector<3> velD = uorb->params.vel_d;
+		state.pos_err = state.pos_sp - state.pos;
+		Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
+		state.vel_sp = state.pos_err.emult(uorb->params.pos_p);
+		Vector<3> velErrNew = state.vel_sp - state.vel;
+		state.vel_err_d = (velErrNew - state.vel_err) / dt;
+		state.vel_err = velErrNew;
+		state.thrust_sp = state.vel_err.emult(uorb->params.vel_p) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
+	}
 }
 
 void MulticopterPositionControlD3::doLoop() {
@@ -555,7 +588,7 @@ void MulticopterPositionControlD3::doLoop() {
 	state.integral_xy_frozen = false;
 	state.integral_z_frozen = false;
 
-	resetSetpointsIfNeeded(dt);
+	resetSetpointsIfNeeded(dt, currrentTimestamp);
 	update_ref();
 	getLocalPos();
 	applyRCInputIfAvailable(dt);
@@ -563,7 +596,7 @@ void MulticopterPositionControlD3::doLoop() {
 	fillAndPubishLocalPositionSP();
 
 	if (state.enabled) {
-		calculateThrustSetpointWithPID(dt);
+		calculateThrustSetpointWithPID(dt, currrentTimestamp);
 		limitMaxThrust();
 		updateIntegrals(dt);
 		calculateAttitudeSP();

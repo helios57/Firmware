@@ -72,6 +72,10 @@ namespace pos_control_d3 {
 					param_t tilt_max_air;
 					param_t land_speed;
 					param_t tilt_max_land;
+					param_t target_pos_p;
+					param_t target_pos_d;
+					param_t target_vel_p;
+					param_t target_vel_d;
 			} param_handles;
 
 		public:
@@ -81,14 +85,17 @@ namespace pos_control_d3 {
 					float tilt_max_air;
 					float land_speed;
 					float tilt_max_land;
-
-					math::Vector<3> pos_p;
-					math::Vector<3> vel_p;
-					math::Vector<3> vel_i;
-					math::Vector<3> vel_d;
-					math::Vector<3> vel_ff;
-					math::Vector<3> vel_max;
-					math::Vector<3> sp_offs_max;
+					Vector<3> pos_p;
+					Vector<3> vel_p;
+					Vector<3> vel_i;
+					Vector<3> vel_d;
+					Vector<3> vel_ff;
+					Vector<3> vel_max;
+					Vector<3> sp_offs_max;
+					Vector<3> target_pos_p;
+					Vector<3> target_pos_d;
+					Vector<3> target_vel_p;
+					Vector<3> target_vel_d;
 			} params; //
 			bool newTarget;
 			UOrbBridge();
@@ -128,15 +135,17 @@ namespace pos_control_d3 {
 					hrt_abstime ref_timestamp;
 					struct map_projection_reference_s ref_pos;
 					float ref_alt;
-					math::Vector<3> pos;
-					math::Vector<3> pos_sp;
-					math::Vector<3> vel;
-					math::Vector<3> vel_sp;
-					math::Vector<3> thrust_int;/* thrust vector integration + hoover */
-					math::Vector<3> thrust_sp;/* thrust vector in NED frame */
-					math::Vector<3> pos_err;
-					math::Vector<3> vel_err;
-					math::Vector<3> vel_err_d;
+					Vector<3> pos;
+					Vector<3> pos_sp;
+					Vector<3> vel;
+					Vector<3> vel_sp;
+					Vector<3> thrust_int;/* thrust vector integration + hoover */
+					Vector<3> thrust_sp;/* thrust vector in NED frame */
+					Vector<3> pos_err;
+					Vector<3> vel_err;
+					Vector<3> vel_err_d;
+					Vector<3> targetPosNED;
+					hrt_abstime targetTimestamp;
 					float thrust_abs; //
 					bool integral_xy_frozen; //
 					bool integral_z_frozen; //
@@ -152,7 +161,7 @@ namespace pos_control_d3 {
 			UOrbBridge *uorb;
 			void initialize(); //
 			void doLoop();
-			void resetSetpointsIfNeeded(float dt); //
+			void resetSetpointsIfNeeded(float dt, hrt_abstime currrentTimestamp); //
 			bool checkEnablement();
 			void applyRCInputIfAvailable(float dt);
 			void applyTargetInput(hrt_abstime currrentTimestamp);
@@ -168,7 +177,7 @@ namespace pos_control_d3 {
 			void limitMaxThrust();
 			void getLocalPos();
 			void fillAndPubishLocalPositionSP();
-			void calculateThrustSetpointWithPID(float dt);
+			void calculateThrustSetpointWithPID(float dt, hrt_abstime currrentTimestamp);
 	};
 } /* namespace pos_control_d3 */
 
