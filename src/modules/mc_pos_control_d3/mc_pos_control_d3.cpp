@@ -386,14 +386,14 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 
 		float targetRadX = d3Target.y;
 		float targetRadY = -d3Target.x;
-		Vector<3> frame_m;
-		frame_m(0) = targetRadX * distBottom;
-		frame_m(1) = targetRadY * distBottom;
-		frame_m(2) = 0.0f;
+		Vector<3> targetFrameRad;
+		targetFrameRad(0) = targetRadX;
+		targetFrameRad(1) = targetRadY;
+		targetFrameRad(2) = 0.0f;
 
-		Matrix<3, 3> R_yaw_sp;
-		R_yaw_sp.from_euler(0.0f, 0.0f, vehicleAttitude.yaw);
-		state.targetPosNED = R_yaw_sp * frame_m;
+		state.R_yaw_sp.from_euler(0.0f, 0.0f, vehicleAttitude.yaw);
+		state.targetRadNED = state.R_yaw_sp * targetFrameRad;
+		state.targetPosNED = state.R_yaw_sp * (targetFrameRad * distBottom);
 
 		state.pos_sp(0) = state.pos(0) + state.targetPosNED(0);
 		state.pos_sp(1) = state.pos(1) + state.targetPosNED(1);
@@ -553,28 +553,25 @@ void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
 
 void MulticopterPositionControlD3::calculateThrustSetpointWithPID(float dt, hrt_abstime currrentTimestamp) {
 	Vector<3> oldPosErr = state.pos_err;
-	if ((currrentTimestamp - state.targetTimestamp) < 400000) { //use target directly if fresh
-		state.pos_err = state.targetPosNED;
-		state.pos_err(2) = state.pos_sp(2) - state.pos(2);
-		Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
-		state.vel_sp = state.pos_err.emult(uorb->params.target_pos_p);
-		Vector<3> velErrNew = state.vel_sp - state.vel;
-		state.vel_err_d = (velErrNew - state.vel_err) / dt;
-		state.vel_err = velErrNew;
-		Vector<3> vel_p = state.vel_err.emult(uorb->params.target_vel_p);
-		Vector<3> vel_d = state.vel_err_d.emult(uorb->params.target_vel_d);
-		Vector<3> pos_d = posErrorDelta.emult(uorb->params.target_pos_d);
-		state.thrust_sp = vel_p + vel_d + pos_d + state.thrust_int;
+	Vector<3> velD = uorb->params.vel_d;
+	state.pos_err = state.pos_sp - state.pos;
+	Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
+	state.vel_sp = state.pos_err.emult(uorb->params.pos_p);
+	Vector<3> velErrNew = state.vel_sp - state.vel;
+	state.vel_err_d = (velErrNew - state.vel_err) / dt;
+	state.vel_err = velErrNew;
+	state.thrust_sp = state.vel_err.emult(uorb->params.vel_p) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
+	if ((currrentTimestamp - state.targetTimestamp) < 400000) {
+		//use target directly if fresh
+		Vector<3> err = state.targetRadNED;
+		Vector<3> err_d = (err - state.targetRadErrOld) / dt;
+		Vector<3> targetThrust = err.emult(uorb->params.target_pos_p) + err_d.emult(uorb->params.target_pos_d) + state.thrust_int;
+		state.thrust_sp(0) = constrain(targetThrust(0), -0.1f, 0.1f);
+		state.thrust_sp(1) = constrain(targetThrust(1), -0.1f, 0.1f);
+		state.targetRadErrOld = err;
 	}
 	else {
-		Vector<3> velD = uorb->params.vel_d;
-		state.pos_err = state.pos_sp - state.pos;
-		Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
-		state.vel_sp = state.pos_err.emult(uorb->params.pos_p);
-		Vector<3> velErrNew = state.vel_sp - state.vel;
-		state.vel_err_d = (velErrNew - state.vel_err) / dt;
-		state.vel_err = velErrNew;
-		state.thrust_sp = state.vel_err.emult(uorb->params.vel_p) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
+		state.targetRadErrOld.zero();
 	}
 }
 

@@ -215,7 +215,7 @@ PARAM_DEFINE_FLOAT(MPC_LAND_SPEED, 1.0f);
  * @min 0.0
  * @group Multicopter Position Control
  */
-PARAM_DEFINE_FLOAT(MPC_TARGET_POS_P, 1.0f);
+PARAM_DEFINE_FLOAT(MPC_TARGET_POS_P, 0.06f);
 
 /**
  * Proportional for Target in PID
@@ -225,7 +225,7 @@ PARAM_DEFINE_FLOAT(MPC_TARGET_POS_P, 1.0f);
  * @group Multicopter Position Control
  */
 
-PARAM_DEFINE_FLOAT(MPC_TARGET_POS_D, 0.007f);
+PARAM_DEFINE_FLOAT(MPC_TARGET_POS_D, 0.008f);
 /**
  * Proportional for Target in PID
  *
