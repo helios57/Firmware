@@ -67,6 +67,7 @@
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/manual_control_setpoint.h>
+#include <uORB/topics/d3_control.h>
 #include <uORB/topics/d3_target.h>
 #include <uORB/topics/d3_flow.h>
 #include <uORB/topics/telemetry_status.h>
@@ -124,6 +125,7 @@ private:
 	void handle_message_set_attitude_target(mavlink_message_t *msg);
 	void handle_message_radio_status(mavlink_message_t *msg);
 	void handle_message_manual_control(mavlink_message_t *msg);
+	void handle_message_d3_control(mavlink_message_t *msg);
 	void handle_message_d3_target(mavlink_message_t *msg);
 	void handle_message_d3_flow(mavlink_message_t *msg);
 	void handle_message_heartbeat(mavlink_message_t *msg);
@@ -162,6 +164,7 @@ private:
 	orb_advert_t _telemetry_status_pub;
 	orb_advert_t _rc_pub;
 	orb_advert_t _manual_pub;
+	orb_advert_t _d3_control_pub;
 	orb_advert_t _d3_target_pub;
 	orb_advert_t _d3_flow_pub;
 	int _control_mode_sub;

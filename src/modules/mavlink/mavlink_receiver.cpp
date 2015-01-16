@@ -116,6 +116,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_telemetry_status_pub(-1),
 	_rc_pub(-1),
 	_manual_pub(-1),
+	_d3_control_pub(-1),
 	_d3_target_pub(-1),
 	_d3_flow_pub(-1),
 	_control_mode_sub(orb_subscribe(ORB_ID(vehicle_control_mode))),
@@ -176,6 +177,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 
 	case MAVLINK_MSG_ID_MANUAL_CONTROL:
 		handle_message_manual_control(msg);
+		break;
+
+	case MAVLINK_MSG_ID_D3_CONTROL:
+		handle_message_d3_control(msg);
 		break;
 
 	case MAVLINK_MSG_ID_D3_TARGET:
@@ -878,6 +883,27 @@ MavlinkReceiver::handle_message_manual_control(mavlink_message_t *msg)
 
 	} else {
 		orb_publish(ORB_ID(manual_control_setpoint), _manual_pub, &manual);
+	}
+}
+void
+MavlinkReceiver::handle_message_d3_control(mavlink_message_t *msg)
+{
+	mavlink_d3_control_t t;
+	mavlink_msg_d3_control_decode(msg, &t);
+
+	struct d3_control_s control;
+	memset(&control, 0, sizeof(control));
+
+	control.state = t.state;
+	control.x = t.x;
+	control.y = t.y;
+	control.z = t.z;
+
+	if (_d3_control_pub < 0) {
+		_d3_control_pub = orb_advertise(ORB_ID(d3_control), &control);
+
+	} else {
+		orb_publish(ORB_ID(d3_control), _d3_control_pub, &control);
 	}
 }
 void
