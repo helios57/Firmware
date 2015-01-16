@@ -379,22 +379,16 @@ void MulticopterPositionControlD3::applyTargetInput(hrt_abstime currrentTimestam
 	if (!state.manualXYinput && uorb->newTarget) {
 		uorb->newTarget = false;
 		state.targetTimestamp = currrentTimestamp;
-		d3_target_s d3Target = uorb->d3_target;
-		vehicle_attitude_s vehicleAttitude = uorb->vehicle_attitude;
-		vehicle_local_position_s vehicleLocalPosition = uorb->vehicle_local_position;
-		float distBottom = vehicleLocalPosition.dist_bottom;
+		state.targetExternalTimestampOld = state.targetExternalTimestamp;
+		state.targetExternalTimestamp = uorb->d3_target.timestampExternal;
 
-		float targetRadX = d3Target.y;
-		float targetRadY = -d3Target.x;
-		Vector<3> targetFrameRad;
-		targetFrameRad(0) = targetRadX;
-		targetFrameRad(1) = targetRadY;
-		targetFrameRad(2) = 0.0f;
-
-		state.R_yaw_sp.from_euler(0.0f, 0.0f, vehicleAttitude.yaw);
+		Vector<3> targetFrameRad(uorb->d3_target.y, -uorb->d3_target.x, 0.0f);
+		state.R_yaw_sp.from_euler(0.0f, 0.0f, uorb->vehicle_attitude.yaw);
 		state.targetRadNED = state.R_yaw_sp * targetFrameRad;
-		state.targetPosNED = state.R_yaw_sp * (targetFrameRad * distBottom);
-
+		state.targetPosNEDOld = state.targetPosNED;
+		state.targetPosNED(0) = tanf(state.targetRadNED(0)) * uorb->vehicle_local_position.dist_bottom;
+		state.targetPosNED(1) = tanf(state.targetRadNED(1)) * uorb->vehicle_local_position.dist_bottom;
+		state.targetPosNED(2) = -uorb->vehicle_local_position.dist_bottom;
 		state.pos_sp(0) = state.pos(0) + state.targetPosNED(0);
 		state.pos_sp(1) = state.pos(1) + state.targetPosNED(1);
 	}
@@ -552,26 +546,38 @@ void MulticopterPositionControlD3::fillAndPubishLocalPositionSP() {
 }
 
 void MulticopterPositionControlD3::calculateThrustSetpointWithPID(float dt, hrt_abstime currrentTimestamp) {
-	Vector<3> oldPosErr = state.pos_err;
-	Vector<3> velD = uorb->params.vel_d;
+	Vector<3> oldPosErr(state.pos_err);
 	state.pos_err = state.pos_sp - state.pos;
-	Vector<3> posErrorDelta = (state.pos_err - oldPosErr) / dt;
+	Vector<3> posErrorDelta((state.pos_err - oldPosErr) / dt);
 	state.vel_sp = state.pos_err.emult(uorb->params.pos_p);
-	Vector<3> velErrNew = state.vel_sp - state.vel;
+	Vector<3> velErrNew(state.vel_sp - state.vel);
 	state.vel_err_d = (velErrNew - state.vel_err) / dt;
 	state.vel_err = velErrNew;
-	state.thrust_sp = state.vel_err.emult(uorb->params.vel_p) + state.vel_err_d.emult(velD) + posErrorDelta.emult(velD) + state.thrust_int;
+	state.thrust_sp = state.vel_err.emult(uorb->params.vel_p) + state.vel_err_d.emult(uorb->params.vel_d) + posErrorDelta.emult(uorb->params.vel_d) + state.thrust_int;
+	//use only target if fresh
 	if ((currrentTimestamp - state.targetTimestamp) < 400000) {
-		//use target directly if fresh
-		Vector<3> err = state.targetRadNED;
-		Vector<3> err_d = (err - state.targetRadErrOld) / dt;
-		Vector<3> targetThrust = err.emult(uorb->params.target_pos_p) + err_d.emult(uorb->params.target_pos_d) + state.thrust_int;
-		state.thrust_sp(0) = constrain(targetThrust(0), -0.1f, 0.1f);
-		state.thrust_sp(1) = constrain(targetThrust(1), -0.1f, 0.1f);
-		state.targetRadErrOld = err;
+		state.targetErrX = state.targetPosNED(0);
+		state.targetErrY = state.targetPosNED(1);
+		uint64_t dtUs = state.targetExternalTimestamp - state.targetExternalTimestampOld;
+		if (dtUs > 0 && dtUs < 100000) {
+			float dtSec = dtUs / 100000.0f;
+			float velX = (state.targetPosNED(0) - state.targetPosNEDOld(0)) / dtSec;
+			float velY = (state.targetPosNED(1) - state.targetPosNEDOld(1)) / dtSec;
+			state.targetErrX -= uorb->params.target_vel_p(0) * velX;
+			state.targetErrY -= uorb->params.target_vel_p(1) * velY;
+		}
+		float errDX = (state.targetErrX - state.targetErrOldX) / dt;
+		float errDY = (state.targetErrY - state.targetErrOldY) / dt;
+		float thrustX = uorb->params.target_pos_p(0) * state.targetErrX + uorb->params.target_pos_d(0) * errDX + state.thrust_int(0);
+		float thrustY = uorb->params.target_pos_p(1) * state.targetErrY + uorb->params.target_pos_d(1) * errDY + state.thrust_int(1);
+		state.thrust_sp(0) = constrain(thrustX, -0.2f, 0.2f);
+		state.thrust_sp(1) = constrain(thrustY, -0.2f, 0.2f);
+		state.targetErrOldX = state.targetErrX;
+		state.targetErrOldY = state.targetErrY;
 	}
 	else {
-		state.targetRadErrOld.zero();
+		state.targetErrOldX = 0.0f;
+		state.targetErrOldY = 0.0f;
 	}
 }
 

@@ -145,8 +145,14 @@ namespace pos_control_d3 {
 					Vector<3> vel_err;
 					Vector<3> vel_err_d;
 					Vector<3> targetPosNED;
+					Vector<3> targetPosNEDOld;
 					Vector<3> targetRadNED;
-					Vector<3> targetRadErrOld;
+					hrt_abstime targetExternalTimestamp;
+					hrt_abstime targetExternalTimestampOld;
+					float targetErrX;
+					float targetErrY;
+					float targetErrOldX;
+					float targetErrOldY;
 					Matrix<3, 3> R_yaw_sp;
 					hrt_abstime targetTimestamp;
 					float thrust_abs; //
